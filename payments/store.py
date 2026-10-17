@@ -21,7 +21,14 @@ CREATE TABLE IF NOT EXISTS transactions (
     tx_hash TEXT,
     status TEXT NOT NULL,
     ts REAL NOT NULL
-)
+);
+CREATE TABLE IF NOT EXISTS paid_route_requests (
+    ts REAL NOT NULL,
+    route TEXT NOT NULL,
+    offer_id TEXT,
+    session_id TEXT,
+    status_code INTEGER NOT NULL
+);
 """
 
 
@@ -32,7 +39,7 @@ class ReplayError(Exception):
 def _conn():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
-    conn.execute(SCHEMA)
+    conn.executescript(SCHEMA)
     return conn
 
 
@@ -79,3 +86,35 @@ def list_all():
     with _conn() as conn:
         rows = conn.execute("SELECT * FROM transactions ORDER BY ts DESC").fetchall()
     return [dict(r) for r in rows]
+
+
+def record_request(route, offer_id, session_id, status_code):
+    with _conn() as conn:
+        conn.execute("INSERT INTO paid_route_requests VALUES (?, ?, ?, ?, ?)",
+                     (time.time(), route, offer_id, session_id, status_code))
+
+
+def stats():
+    """Publisher dashboard numbers (agent.md P4 item 3). Revenue counts settled transactions only."""
+    with _conn() as conn:
+        requests = conn.execute("SELECT COUNT(*) FROM paid_route_requests").fetchone()[0]
+        by_status = dict(conn.execute(
+            "SELECT status_code, COUNT(*) FROM paid_route_requests GROUP BY status_code").fetchall())
+        paid, revenue, payers, last_ts = conn.execute(
+            "SELECT COUNT(*), COALESCE(SUM(amount_atomic), 0), COUNT(DISTINCT payer), MAX(ts) "
+            "FROM transactions WHERE status = 'settled'").fetchone()
+        by_amount = conn.execute(
+            "SELECT amount_atomic, COUNT(*), SUM(amount_atomic) FROM transactions "
+            "WHERE status = 'settled' GROUP BY amount_atomic ORDER BY amount_atomic").fetchall()
+    return {
+        "requests": requests,
+        "paid_requests": paid,
+        "refused_requests": sum(n for code, n in by_status.items() if code >= 400 and code != 402),
+        "payment_required_sent": by_status.get(402, 0),
+        "revenue_usdc": revenue / 1_000_000,
+        "average_usdc": round(revenue / paid / 1_000_000, 6) if paid else 0.0,
+        "unique_payers": payers,
+        "last_sale_ts": last_ts,
+        "by_price": [{"price_usdc": a / 1_000_000, "sales": n, "revenue_usdc": s / 1_000_000}
+                     for a, n, s in by_amount],
+    }

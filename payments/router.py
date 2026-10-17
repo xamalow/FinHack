@@ -20,7 +20,7 @@ from x402.http import (
 )
 from x402.schemas import ResourceInfo
 
-from payments import config, deps, store
+from payments import balances, config, deps, store
 from payments.x402_server import build_requirements, get_server
 
 router = APIRouter()
@@ -58,6 +58,13 @@ async def query(
     authorization: str | None = Header(None),
     payment_signature: str | None = Header(None),
 ):
+    response = await paid_query(route, request, offer_id, authorization, payment_signature)
+    session = auth(authorization)
+    store.record_request(route, offer_id, session["session_id"] if session else None, response.status_code)
+    return response
+
+
+async def paid_query(route, request, offer_id, authorization, payment_signature):
     session = auth(authorization)
     if session is None:
         return JSONResponse({"error": "invalid_session"}, status_code=401)
@@ -85,6 +92,10 @@ async def query(
     requirements = build_requirements(amount, pay_to)
 
     if not payment_signature:
+        try:
+            await balances.watch(sid, {"buyer": session["wallet_address"], "publisher": pay_to})
+        except Exception as e:
+            deps.log_event(sid, "chain", "balance_watch_failed", f"Balance watch not started: {type(e).__name__}")
         return await payment_required(request, offer, requirements, sid)
 
     try:
@@ -189,3 +200,20 @@ async def receipt(tx_hash: str, authorization: str | None = Header(None)):
 @router.get("/transactions")
 async def transactions():
     return store.list_all()
+
+
+@router.get("/balance/{address}")
+async def balance(address: str):
+    if not balances.is_address(address):
+        return JSONResponse({"error": "invalid_address"}, status_code=400)
+    try:
+        atomic = await balances.read_balance(address)
+    except Exception as e:
+        return JSONResponse({"error": "rpc_error", "detail": type(e).__name__}, status_code=502)
+    return {"address": address, "asset": "USDC", "network": config.NETWORK,
+            "balance_atomic": atomic, "balance_usdc": atomic / 1_000_000}
+
+
+@router.get("/publisher/stats")
+async def publisher_stats():
+    return {"publisher_wallet": deps.get_publisher_wallet(), **store.stats()}
