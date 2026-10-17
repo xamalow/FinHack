@@ -8,8 +8,10 @@ activated (the gateway answers 404 before that). sitemap.xml and
 robots.txt are rewritten on the fly with the host actually used.
 """
 import argparse
+import contextlib
 import os
 import re
+import socket
 import urllib.error
 import urllib.request
 from functools import partial
@@ -57,13 +59,24 @@ class SiteHandler(SimpleHTTPRequestHandler):
         self.wfile.write(body)
 
 
+class DualStackServer(ThreadingHTTPServer):
+    # Listen on IPv6 and IPv4, otherwise "localhost" (IPv6 first on
+    # Windows) waits for a timeout on every request.
+    address_family = socket.AF_INET6
+
+    def server_bind(self):
+        with contextlib.suppress(Exception):
+            self.socket.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
+        return super().server_bind()
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--port", type=int, default=8001)
     ap.add_argument("--gateway", default=os.environ.get("GATEWAY_URL", "http://localhost:8000"))
     args = ap.parse_args()
     SiteHandler.gateway = args.gateway
-    server = ThreadingHTTPServer(("0.0.0.0", args.port), partial(SiteHandler, directory=str(PUBLIC)))
+    server = DualStackServer(("::", args.port), partial(SiteHandler, directory=str(PUBLIC)))
     print(f"Simulated site on http://localhost:{args.port} (manifest proxied to {args.gateway})")
     server.serve_forever()
 
