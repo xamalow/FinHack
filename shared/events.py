@@ -34,7 +34,7 @@ EVENT_TYPES: dict[str, set[str]] = {
         "payment_signed", "data_received", "mission_done",
     },
     "facilitator": {"verify_response", "settle_response"},
-    "chain": {"tx_submitted", "tx_confirmed", "balance_changed"},
+    "chain": {"tx_submitted", "tx_confirmed", "balance_changed", "balance_watch_failed"},
 }
 
 # Payload keys whose values are never shown in the live view.

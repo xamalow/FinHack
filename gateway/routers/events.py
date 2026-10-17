@@ -43,7 +43,7 @@ async def events_stream(
             rows = await asyncio.to_thread(db.list_events, session_id, cursor, 200)
             for row in rows:
                 cursor = row["event_id"]
-                yield {"id": str(row["event_id"]), "event": "event", "data": json.dumps(row)}
+                yield {"id": str(row["event_id"]), "data": json.dumps(row)}
             if not rows:
                 await asyncio.sleep(POLL_SECONDS)
 

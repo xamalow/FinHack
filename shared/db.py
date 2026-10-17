@@ -4,7 +4,8 @@ One file, one connection per call. Every role reads and writes its tables
 through these helpers, so the schema stays in one place.
 
 Timestamps are ISO 8601 UTC strings with milliseconds (`2026-10-18T14:02:11.482Z`).
-They sort and compare correctly as plain strings.
+They sort and compare correctly as plain strings. Exception: `transactions.ts`
+is a Unix epoch float, as P3 (its owner) writes it.
 """
 
 from __future__ import annotations
@@ -103,11 +104,11 @@ CREATE TABLE IF NOT EXISTS transactions (
     offer_id       TEXT NOT NULL UNIQUE,
     payer          TEXT NOT NULL,
     pay_to         TEXT NOT NULL,
-    amount_atomic  TEXT NOT NULL,
+    amount_atomic  INTEGER NOT NULL,
     nonce          TEXT NOT NULL UNIQUE,
     tx_hash        TEXT,
     status         TEXT NOT NULL,
-    ts             TEXT NOT NULL
+    ts             REAL NOT NULL
 );
 
 CREATE TABLE IF NOT EXISTS events (

@@ -56,12 +56,15 @@ def verify(body: KyaVerifyIn, request: Request, identity: AgentIdentity = Depend
     if challenge_row["agent_id"] != identity.agent_id or challenge_row["wallet_address"] != identity.wallet:
         raise _reject(identity, "challenge was issued to another agent")
 
-    try:
-        signer = Account.recover_message(
-            encode_defunct(text=challenge_message(body.nonce, identity.agent_id)), signature=body.signature
-        )
-    except Exception:
-        raise _reject(identity, "unreadable signature")
+    # Agents may sign the bare nonce (agent.md 7.2 step 3) or the full challenge message.
+    signer = None
+    for text in (body.nonce, challenge_message(body.nonce, identity.agent_id)):
+        try:
+            signer = Account.recover_message(encode_defunct(text=text), signature=body.signature)
+        except Exception:
+            raise _reject(identity, "unreadable signature")
+        if signer == identity.wallet:
+            break
     if signer != identity.wallet:
         raise _reject(identity, "signature does not match X-Agent-Wallet")
 
@@ -87,5 +90,5 @@ def verify(body: KyaVerifyIn, request: Request, identity: AgentIdentity = Depend
          "signature": body.signature, "session_id": session_id, "token": token,
          "expires_in_s": config.SESSION_TTL_SECONDS},
     )
-    return KyaVerifyOut(session_id=session_id, agent_id=identity.agent_id, token=token,
+    return KyaVerifyOut(session_id=session_id, agent_id=identity.agent_id, token=token, session_token=token,
                         expires_in_s=config.SESSION_TTL_SECONDS)

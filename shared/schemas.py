@@ -143,7 +143,7 @@ class DiscoverOut(BaseModel):
 
 class KyaChallengeOut(BaseModel):
     nonce: str
-    message: str = Field(description="Exact text the agent must sign (EIP-191 personal_sign)")
+    message: str = Field(description="Text the agent may sign instead of the bare nonce (EIP-191)")
     expires_in_s: int
 
 
@@ -156,6 +156,7 @@ class KyaVerifyOut(BaseModel):
     session_id: str
     agent_id: str
     token: str
+    session_token: str = Field(description="Same value as token, kept for the buyer agent")
     expires_in_s: int
 
 

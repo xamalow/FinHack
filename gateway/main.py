@@ -22,9 +22,8 @@ log = logging.getLogger("gateway")
 # Routers owned by other roles, registered as soon as they exist on main.
 OPTIONAL_ROUTERS = [
     "gateway.routers.publisher_scan",  # P1
-    "gateway.routers.payments",        # P3
-    "gateway.routers.buyer",           # P3
-    "gateway.routers.balances",        # P3
+    "payments.router",                 # P3: /query, /receipt, /transactions, /balance, /publisher/stats
+    "payments.buyer_router",           # P3: /buyer/run, /buyer/approve
 ]
 
 
@@ -54,8 +53,8 @@ for name in OPTIONAL_ROUTERS:
         app.include_router(importlib.import_module(name).router)
         log.info("Registered %s", name)
     except ModuleNotFoundError as e:
-        if e.name != name:
-            raise
+        if not e.name or not name.startswith(e.name):
+            raise  # a real import error inside an existing module
         log.info("%s not present yet, skipped", name)
 
 

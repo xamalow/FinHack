@@ -45,7 +45,7 @@ RULES_PARSER_EFFORT = env("RULES_PARSER_EFFORT", "medium")
 
 def db_path() -> Path:
     """Read at call time so tests can point DB_PATH at a temporary file."""
-    path = Path(env("DB_PATH", "data/finhack.db"))
+    path = Path(env("DB_PATH", "finhack.db"))
     return path if path.is_absolute() else REPO_ROOT / path
 
 

@@ -24,7 +24,9 @@ def audit(offer_id: str) -> dict:
         "offer": offer,
         "agent": agent,
         "session": session,
-        "conversation": db.list_messages(offer["session_id"]),
+        "messages": db.list_messages(offer["session_id"]),
+        "transaction": next((t for t in transactions if t.get("status") == "settled"),
+                            transactions[0] if transactions else None),
         "transactions": transactions,
         "events": db.list_events(session_id=offer["session_id"]),
     }

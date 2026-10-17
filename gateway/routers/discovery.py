@@ -22,7 +22,7 @@ def build_manifest() -> Optional[Manifest]:
     topics = sorted({c["topic"] for c in p1_bridge.get_catalog() if c["status"] != "excluded"})
     return Manifest(
         publisher=publisher.get("name") or config.PUBLISHER_NAME,
-        gateway=config.GATEWAY_PUBLIC_URL,
+        gateway=config.GATEWAY_PUBLIC_URL.rstrip("/"),
         topics=topics,
         payment=ManifestPayment(network=config.NETWORK, pay_to=publisher["wallet_address"]),
     )

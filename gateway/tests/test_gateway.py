@@ -221,6 +221,7 @@ def test_onboarding_rules_wallet_activate_manifest(client, monkeypatch):
     manifest = client.post("/publisher/activate", json={"name": "Demo Research Firm"}).json()
     assert manifest["payment"]["pay_to"] == wallet
     assert manifest["payment"]["network"] == "eip155:84532"
+    assert not manifest["gateway"].endswith("/")
     assert "internal" not in manifest["topics"]
     assert client.get("/.well-known/ai-data.json").json() == manifest
     for t in ("rules_parsed", "rules_confirmed", "wallet_connected", "activated"):
@@ -243,7 +244,8 @@ def test_audit_and_events(client, monkeypatch):
     offer_id = client.post("/session/message", headers=h, json={"message": "table"}).json()["offer"]["offer_id"]
     audit = client.get(f"/audit/{offer_id}").json()
     assert audit["agent"]["wallet_address"] == acct.address
-    assert [m["role"] for m in audit["conversation"]] == ["buyer", "sales_agent"]
+    assert [m["role"] for m in audit["messages"]] == ["buyer", "sales_agent"]
+    assert audit["transaction"] is None
     assert audit["events"]
     evs = client.get(f"/events?session_id={sid}").json()
     assert all(e["session_id"] == sid for e in evs)
@@ -261,3 +263,38 @@ def test_unknown_event_type_raises():
     from shared.events import log_event
     with pytest.raises(ValueError):
         log_event(None, "gateway", "made_up_type", "x")
+
+
+# --- Compatibility with P3 (buyer agent, payments/deps.py) --------------------
+
+
+def test_kya_accepts_signature_of_bare_nonce(client):
+    acct = Account.create()
+    ch = client.post("/kya/challenge", headers=headers(acct)).json()
+    sig = Account.sign_message(encode_defunct(text=ch["nonce"]), acct.key).signature.hex()
+    res = client.post("/kya/verify", headers=headers(acct), json={"nonce": ch["nonce"], "signature": sig})
+    assert res.status_code == 200
+    assert res.json()["session_token"] == res.json()["token"]
+
+
+def test_integration_adapter_for_payments(client, monkeypatch):
+    from gateway import integration
+    acct = Account.create()
+    res = kya(client, acct).json()
+    assert integration.get_session(res["token"]) == {
+        "session_id": res["session_id"], "agent_id": "research-bot", "wallet_address": acct.address}
+    assert integration.get_session("garbage") is None
+
+    h = {**headers(acct), "Authorization": f"Bearer {res['token']}"}
+    script_llm(monkeypatch, SalesAgentOutput(action="propose_offer", message_to_buyer="Deal.", offer=OFFER_S2))
+    offer_id = client.post("/session/message", headers=h, json={"message": "table"}).json()["offer"]["offer_id"]
+    import pytest, time
+    with pytest.raises(ValueError):
+        integration.set_offer_status(offer_id, "paid")  # not accepted yet
+    client.post("/offer/accept", headers=h, json={"offer_id": offer_id})
+    offer = integration.get_offer(offer_id)
+    assert offer["status"] == "accepted" and offer["expires_at"] > time.time()
+    assert integration.get_tier_price("small_table") == 0.50
+    integration.set_offer_status(offer_id, "paid")
+    assert db.get_offer(offer_id)["status"] == "paid"
+    assert "Voltacell" in integration.get_content(["rpt_battery_2025#s2"])["rpt_battery_2025#s2"]
