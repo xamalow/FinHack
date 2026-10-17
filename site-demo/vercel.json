@@ -1,0 +1,7 @@
+{
+  "outputDirectory": "public",
+  "buildCommand": "",
+  "rewrites": [
+    { "source": "/.well-known/ai-data.json", "destination": "https://GATEWAY_PUBLIC_URL/.well-known/ai-data.json" }
+  ]
+}

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  <url><loc>http://localhost:8001/index.html</loc><lastmod>2026-10-17</lastmod></url>
+  <url><loc>http://localhost:8001/about.html</loc><lastmod>2026-10-17</lastmod></url>
+  <url><loc>http://localhost:8001/articles/battery-market-share-2025.html</loc><lastmod>2026-10-17</lastmod></url>
+  <url><loc>http://localhost:8001/articles/lithium-prices-2021-2025.html</loc><lastmod>2026-10-17</lastmod></url>
+  <url><loc>http://localhost:8001/articles/gigafactory-capacity-2025.html</loc><lastmod>2026-10-17</lastmod></url>
+  <url><loc>http://localhost:8001/articles/sodium-ion-outlook-2025.html</loc><lastmod>2026-10-17</lastmod></url>
+  <url><loc>http://localhost:8001/internal-notes.html</loc><lastmod>2026-10-17</lastmod></url>
+  <url><loc>http://localhost:8001/drafts/sodium-ion-draft.html</loc><lastmod>2026-10-17</lastmod></url>
+  <url><loc>http://localhost:8001/reports/rpt_battery_2025.pdf</loc><lastmod>2026-10-17</lastmod></url>
+  <url><loc>http://localhost:8001/reports/rpt_lithium_2025.pdf</loc><lastmod>2026-10-17</lastmod></url>
+  <url><loc>http://localhost:8001/reports/rpt_gigafactory_2025.pdf</loc><lastmod>2026-10-17</lastmod></url>
+  <url><loc>http://localhost:8001/reports/rpt_sodium_2025.pdf</loc><lastmod>2026-10-17</lastmod></url>
+</urlset>
