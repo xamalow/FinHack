@@ -11,6 +11,20 @@ import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
 
+
+def _load_dotenv(path=Path(__file__).resolve().parent.parent / ".env"):
+    """Read KEY=VALUE lines from the repo .env without overriding the real environment."""
+    if not path.exists():
+        return
+    for line in path.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if line and not line.startswith("#") and "=" in line:
+            key, value = line.split("=", 1)
+            os.environ.setdefault(key.strip(), value.strip().strip('"').strip("'"))
+
+
+_load_dotenv()
+
 try:
     from shared.events import log_event  # noqa: F401
 except ImportError:
