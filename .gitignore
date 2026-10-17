@@ -1,0 +1,19 @@
+# Secrets
+.env
+*.pem
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.pytest_cache/
+
+# Local data
+*.db
+*.db-wal
+*.db-shm
+data/
+
+# Node
+node_modules/
+.next/
