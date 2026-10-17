@@ -241,7 +241,7 @@ class BuyerAgent:
             gateway, pay_to = manifest["gateway"], payment["pay_to"]
             self.emit("manifest_read", f"Manifest of {manifest.get('publisher')}, pays to {pay_to[:10]}...", manifest)
 
-            found = (await http.get(f"{gateway}/discover", params={"q": self.mission})).json()
+            found = (await http.get(f"{gateway}/discover", params={"q": self.mission}, headers=ids)).json()
             self.emit("discover_called", "Free summary received", found)
 
             nonce = (await http.post(f"{gateway}/kya/challenge", headers=ids)).json()["nonce"]

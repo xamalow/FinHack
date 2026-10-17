@@ -153,7 +153,12 @@ async def paid_query(route, request, offer_id, authorization, payment_signature)
         return error(502, sid, "payment_rejected", f"Facilitator error: {type(e).__name__}", {"error": str(e)})
 
     store.mark_settled(tx_id, settle.transaction)
-    deps.set_offer_status(offer_id, "paid")
+    # Money has moved: from here on we always deliver. The transactions row already blocks a second sale.
+    try:
+        deps.set_offer_status(offer_id, "paid")
+    except Exception as e:
+        deps.log_event(sid, "gateway", "payment_settled", f"Offer status not updated: {type(e).__name__}",
+                       {"offer_id": offer_id, "error": str(e)})
     tx_url = f"{config.EXPLORER_URL}/tx/{settle.transaction}"
     deps.log_event(sid, "gateway", "payment_settled", f"{tier_price} USDC settled", {"tx_hash": settle.transaction})
     deps.log_event(sid, "chain", "tx_confirmed", f"Tx {settle.transaction[:10]}... confirmed",
