@@ -8,6 +8,7 @@ Order on a paid request:
 5. facilitator verify, then settle
 6. only after settlement: mark offer paid, load content, 200 with PAYMENT-RESPONSE
 """
+import asyncio
 import time
 
 from fastapi import APIRouter, Body, Header, Request
@@ -23,6 +24,7 @@ from payments import config, deps, store
 from payments.x402_server import build_requirements, get_server
 
 router = APIRouter()
+SETTLE_ATTEMPTS = 3
 
 
 def error(status, session_id, event_type, summary, payload=None, headers=None):
@@ -121,10 +123,17 @@ async def query(
             return await payment_required(request, offer, requirements, sid, verify.invalid_reason or "Verify failed")
         deps.log_event(sid, "gateway", "payment_verified", f"Payment of {tier_price} USDC verified", {"payer": payer})
 
-        settle = await get_server().settle_payment(payload, matched)
-        deps.log_event(sid, "facilitator", "settle_response",
-                       f"Settled, tx {settle.transaction}" if settle.success else f"Settle failed: {settle.error_reason}",
-                       settle.model_dump(by_alias=True))
+        # The public facilitator sometimes fails to broadcast (its own nonce clash). Retrying is safe:
+        # the EIP-3009 nonce lets the USDC contract execute this authorization at most once.
+        for attempt in range(1, SETTLE_ATTEMPTS + 1):
+            settle = await get_server().settle_payment(payload, matched)
+            deps.log_event(sid, "facilitator", "settle_response",
+                           f"Settled, tx {settle.transaction}" if settle.success
+                           else f"Settle failed (attempt {attempt}): {settle.error_reason}",
+                           settle.model_dump(by_alias=True))
+            if settle.success or "transaction_failed" not in (settle.error_reason or ""):
+                break
+            await asyncio.sleep(2)
         if not settle.success:
             store.release(tx_id)
             return await payment_required(request, offer, requirements, sid, settle.error_reason or "Settle failed")

@@ -73,7 +73,7 @@ def get_content(content_ids):
     return {cid: CONTENT.get(cid, "") for cid in content_ids}
 
 
-def create_offer(session_id, tier, content_ids, price_usdc=None):
+def create_offer(session_id, tier, content_ids, price_usdc=None, status="accepted"):
     offer_id = "off_" + uuid.uuid4().hex[:8]
     OFFERS[offer_id] = {
         "offer_id": offer_id,
@@ -83,7 +83,7 @@ def create_offer(session_id, tier, content_ids, price_usdc=None):
         "tier": tier,
         "price_usdc": TIERS[tier] if price_usdc is None else price_usdc,
         "license": "internal_use_only",
-        "status": "accepted",
+        "status": status,
         "expires_at": time.time() + 300,
     }
     return OFFERS[offer_id]
