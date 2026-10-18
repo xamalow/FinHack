@@ -1,4 +1,4 @@
-"""End-to-end buyer agent test on Base Sepolia (spends 2.10 test USDC per run).
+"""End-to-end buyer agent test (one wallet per scenario, so purchase history does not interfere) on Base Sepolia (spends 2.10 test USDC per run).
 
 Start:  .venv/bin/uvicorn payments.dev_app:app --port 4022
 Run:    .venv/bin/python payments/e2e_buyer.py
@@ -27,11 +27,19 @@ async def wait_for(http, run_id, statuses, timeout=120):
     return state
 
 
+async def get_events(http):
+    """dev_app exposes /dev/events, the P2 gateway exposes /events."""
+    r = await http.get(f"{BASE}/dev/events")
+    if r.status_code == 404:
+        r = await http.get(f"{BASE}/events", params={"after_id": 0, "limit": 10000})
+    return r.json()
+
+
 async def main():
     async with httpx.AsyncClient(timeout=30) as http:
         run = (await http.post(f"{BASE}/buyer/run", json={
             "mission": "I need the 2025 market share of the top European battery manufacturer, one figure.",
-            "budget_usdc": 5.0})).json()
+            "budget_usdc": 5.0, "wallet": 1})).json()
         state = await wait_for(http, run["run_id"], {"done", "refused", "failed"})
         check("0.10 purchase completes", state["status"] == "done", state["status"])
         check("budget updated to 4.90", abs(state["remaining_usdc"] - 4.90) < 1e-9, state["remaining_usdc"])
@@ -40,7 +48,7 @@ async def main():
             print("     tx", state["receipts"][0]["explorer"])
 
         run = (await http.post(f"{BASE}/buyer/run", json={
-            "mission": "I need the full battery market section with methodology.", "budget_usdc": 5.0})).json()
+            "mission": "I need the full battery market section with methodology.", "budget_usdc": 5.0, "wallet": 2})).json()
         state = await wait_for(http, run["run_id"], {"waiting_approval", "done", "refused", "failed"})
         check("2.00 offer pauses for human approval", state["status"] == "waiting_approval", state["status"])
         offer_id = (state.get("pending_offer") or {}).get("offer_id")
@@ -52,13 +60,13 @@ async def main():
             print("     tx", state["receipts"][0]["explorer"])
 
         run = (await http.post(f"{BASE}/buyer/run", json={
-            "mission": "I need the full battery market section with methodology.", "budget_usdc": 1.5})).json()
+            "mission": "I need the full battery market section with methodology.", "budget_usdc": 1.5, "wallet": 3})).json()
         state = await wait_for(http, run["run_id"], {"done", "refused", "failed"})
         check("offer above budget refused, nothing spent", state["status"] == "refused" and state["spent_usdc"] == 0,
               state["status"])
 
         run = (await http.post(f"{BASE}/buyer/run", json={
-            "mission": "I need the full battery market section with methodology.", "budget_usdc": 5.0})).json()
+            "mission": "I need the full battery market section with methodology.", "budget_usdc": 5.0, "wallet": 4})).json()
         state = await wait_for(http, run["run_id"], {"waiting_approval", "done", "refused", "failed"})
         offer_id = (state.get("pending_offer") or {}).get("offer_id")
         await http.post(f"{BASE}/buyer/approve", json={"offer_id": offer_id, "approved": False})
@@ -66,7 +74,7 @@ async def main():
         check("approval denied -> refused, nothing spent", state["status"] == "refused" and state["spent_usdc"] == 0,
               state["status"])
 
-        events = [e["type"] for e in (await http.get(f"{BASE}/dev/events")).json()]
+        events = [e["type"] for e in await get_events(http)]
         for t in ["mission_started", "manifest_read", "discover_called", "kya_signed", "buyer_message",
                   "offer_evaluated", "approval_requested", "approval_granted", "offer_refused_budget",
                   "payment_signed", "data_received", "mission_done"]:

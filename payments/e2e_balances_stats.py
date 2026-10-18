@@ -19,6 +19,14 @@ def check(name, cond, detail=""):
     print(("PASS " if cond else "FAIL ") + name + (f"  ({detail})" if detail else ""))
 
 
+async def get_events(http):
+    """dev_app exposes /dev/events, the P2 gateway exposes /events."""
+    r = await http.get(f"{BASE}/dev/events")
+    if r.status_code == 404:
+        r = await http.get(f"{BASE}/events", params={"after_id": 0, "limit": 10000})
+    return r.json()
+
+
 async def main():
     async with httpx.AsyncClient(timeout=30) as http:
         publisher = os.environ.get("PUBLISHER_WALLET_ADDRESS") or (await http.get(f"{BASE}/publisher/stats")).json()["publisher_wallet"]
@@ -34,7 +42,7 @@ async def main():
 
         run = (await http.post(f"{BASE}/buyer/run", json={
             "mission": "I need the 2025 market share of the top European battery manufacturer, one figure.",
-            "budget_usdc": 5.0})).json()
+            "budget_usdc": 5.0, "wallet": int(os.getenv("E2E_WALLET", "1"))})).json()
         for _ in range(240):
             state = (await http.get(f"{BASE}/buyer/runs/{run['run_id']}")).json()
             if state["status"] in {"done", "refused", "failed"}:
@@ -45,7 +53,7 @@ async def main():
 
         changes = []
         for _ in range(20):
-            events = (await http.get(f"{BASE}/dev/events")).json()
+            events = await get_events(http)
             changes = [e for e in events if e["type"] == "balance_changed" and e["session_id"] == session_id]
             if {c["payload"]["role"] for c in changes} >= {"buyer", "publisher"}:
                 break
