@@ -24,9 +24,9 @@ CREATE TABLE IF NOT EXISTS catalog (
     report_id       TEXT NOT NULL,
     title           TEXT NOT NULL,
     section         TEXT NOT NULL,
-    topic           TEXT NOT NULL,
-    region          TEXT NOT NULL,
-    period          TEXT NOT NULL,
+    topic           TEXT,
+    region          TEXT,
+    period          TEXT,
     data_types      TEXT NOT NULL DEFAULT '[]',
     sensitivity     TEXT NOT NULL DEFAULT 'proprietary',
     status          TEXT NOT NULL DEFAULT 'sellable'
@@ -169,14 +169,21 @@ def _decode(row: sqlite3.Row) -> dict[str, Any]:
     return out
 
 
-@contextmanager
-def connect() -> Iterator[sqlite3.Connection]:
+def get_connection() -> sqlite3.Connection:
+    """Plain connection to the shared database file. The caller commits and closes it."""
     path = db_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(path, timeout=10)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
+    return conn
+
+
+@contextmanager
+def connect() -> Iterator[sqlite3.Connection]:
+    """Connection that commits on success, rolls back on error, and always closes."""
+    conn = get_connection()
     try:
         yield conn
         conn.commit()

@@ -18,7 +18,7 @@ log = logging.getLogger("events")
 
 EVENT_TYPES: dict[str, set[str]] = {
     "publisher": {
-        "scan_started", "scan_extracting", "scan_indexing", "scan_ready", "catalog_updated",
+        "scan_started", "scan_extracting", "scan_indexing", "scan_ready", "scan_failed", "catalog_updated",
         "rules_parsed", "rules_confirmed", "wallet_connected", "activated",
     },
     "gateway": {

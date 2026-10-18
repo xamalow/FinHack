@@ -4,9 +4,10 @@ P2 consumes them but does not own them. Until P1's `ingestion` package exports
 them, this module falls back to the `catalog` / `content` tables, then to
 `mock_catalog.json`, so the gateway runs end to end with mock data.
 
-Expected P1 interface (agent.md section 8, P1 "Exposes"):
+P1 interface (agent.md section 8, P1 "Exposes"):
 
-    from ingestion import get_catalog, get_content, contains_paid_figures
+    from ingestion.store import get_catalog, get_content
+    from ingestion.leak_filter import contains_paid_figures
 """
 
 from __future__ import annotations
@@ -23,12 +24,14 @@ from shared import db
 log = logging.getLogger("p1_bridge")
 
 try:  # pragma: no cover - depends on P1's branch being merged
-    from ingestion import contains_paid_figures as _p1_contains_paid_figures
-    from ingestion import get_catalog as _p1_get_catalog
-    from ingestion import get_content as _p1_get_content
+    from ingestion.leak_filter import contains_paid_figures as _p1_contains_paid_figures
+    from ingestion.store import get_catalog as _p1_get_catalog
+    from ingestion.store import get_content as _p1_get_content
 
     P1_AVAILABLE = True
-except ImportError:
+except ModuleNotFoundError as e:
+    if not e.name or not e.name.startswith("ingestion"):
+        raise  # P1 is present but one of its dependencies is missing
     P1_AVAILABLE = False
 
 MOCK_PATH = Path(__file__).with_name("mock_catalog.json")
