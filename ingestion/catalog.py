@@ -173,10 +173,18 @@ def _report_id(url):
     return _slug(os.path.splitext(os.path.basename(urlparse(url).path))[0])
 
 
+def _stem(url):
+    return os.path.splitext(url.split("?", 1)[0])[0]
+
+
 def plan_items(result):
     """Turn crawled documents into catalog entries (without LLM metadata yet).
-    Returns [dict(content_id, report_id, title, section, text, kind, url, internal)]."""
+    Returns [dict(content_id, report_id, title, section, text, kind, url, internal)].
+    An HTML page that links to one report, either the PDF itself or a page
+    with the same name (reports/x.html for reports/x.pdf), is that report's
+    free summary."""
     pdf_ids = {d.url: _report_id(d.url) for d in result.documents if d.kind == "pdf"}
+    pdf_by_stem = {_stem(u): rid for u, rid in pdf_ids.items()}
     planned = []
     for doc in result.documents:
         if doc.kind == "pdf":
@@ -190,7 +198,7 @@ def plan_items(result):
         internal = bool(INTERNAL_MARKERS.search(f"{path} {doc.title}\n{doc.text}"))
         if not internal and (CORPORATE_PATHS.search(path) or not doc.has_article):
             continue
-        linked = [pdf_ids[link] for link in doc.links if link in pdf_ids]
+        linked = [pdf_by_stem[_stem(link)] for link in doc.content_links if _stem(link) in pdf_by_stem]
         if internal:
             rid = "page_" + _slug(os.path.splitext(os.path.basename(path))[0])
             planned.append(dict(content_id=f"{rid}#s1", report_id=rid, title=doc.title, section=doc.title,
