@@ -16,7 +16,7 @@ import secrets
 from fastapi import APIRouter, Body, Depends, Header, HTTPException, Request
 from fastapi.responses import JSONResponse
 
-from payments import config, deps
+from payments import balances, config, deps
 
 _spec = importlib.util.spec_from_file_location("buyer_agent", config.ROOT / "buyer-agent" / "agent.py")
 buyer_agent = importlib.util.module_from_spec(_spec)
@@ -78,6 +78,37 @@ async def buyer_status(run_id: str):
     if agent is None:
         return JSONResponse({"error": "unknown_run"}, status_code=404)
     return {"run_id": run_id, **agent.result()}
+
+
+@router.get("/buyer/treasury")
+async def buyer_treasury():
+    """Owner view of the buyer wallets: on-chain USDC, spending by this gateway's runs, and the spend limits."""
+    limits = buyer_agent.Limits(budget_usdc=float(os.getenv("BUYER_BUDGET_USDC", "5.00")))
+    wallets = []
+    for i in range(1, 5):
+        key = os.getenv(f"BUYER_PRIVATE_KEY_{i}")
+        if not key:
+            continue
+        address = buyer_agent.Account.from_key(key).address
+        try:
+            onchain = await balances.read_balance(address) / 1_000_000
+        except Exception:
+            onchain = None
+        runs = [a for a in RUNS.values() if a.account.address == address]
+        wallets.append({
+            "wallet": i, "address": address, "balance_usdc_onchain": onchain,
+            "runs": len(runs), "spent_usdc": round(sum(a.spent_usdc for a in runs), 6),
+            "receipts": [r for a in runs for r in a.receipts],
+        })
+    known = [w["balance_usdc_onchain"] for w in wallets if w["balance_usdc_onchain"] is not None]
+    return {
+        "network": config.NETWORK,
+        "limits": {"budget_usdc": limits.budget_usdc, "max_per_tx_usdc": limits.max_per_tx_usdc,
+                   "approval_threshold_usdc": limits.approval_threshold_usdc},
+        "total_balance_usdc_onchain": round(sum(known), 6),
+        "total_spent_usdc": round(sum(w["spent_usdc"] for w in wallets), 6),
+        "wallets": wallets,
+    }
 
 
 @router.post("/buyer/replay-last")

@@ -86,3 +86,25 @@ def test_approval_resolves():
 def test_approval_times_out_as_refusal():
     import asyncio
     assert asyncio.run(agent.Approvals().wait("off_2", 0.01)) is False
+
+
+def test_wallet_balance_too_low_refused():
+    assert "wallet holds 0.05" in agent.check_wallet_balance(0.10, 50_000)
+
+
+def test_wallet_balance_enough_or_unknown_passes():
+    assert agent.check_wallet_balance(0.10, 100_000) is None
+    assert agent.check_wallet_balance(2.00, None) is None
+
+
+def _agent(budget, wallet_atomic):
+    a = agent.BuyerAgent(mission="m", limits=agent.Limits(budget_usdc=budget),
+                         private_key="0x" + "11" * 32, manifest_url="http://x")
+    a.wallet_atomic = wallet_atomic
+    return a
+
+
+def test_spendable_is_capped_by_onchain_wallet():
+    assert _agent(5.0, 1_500_000).spendable_usdc == 1.5
+    assert _agent(1.0, 9_000_000).spendable_usdc == 1.0
+    assert _agent(5.0, None).spendable_usdc == 5.0

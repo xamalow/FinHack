@@ -53,3 +53,18 @@ def test_remote_owner_with_token_allowed(monkeypatch):
     monkeypatch.setenv("BUYER_OWNER_TOKEN", "s3cret-owner-token")
     r = client("203.0.113.7").get("/buyer/runs/unknown", headers={"X-Owner-Token": "s3cret-owner-token"})
     assert r.status_code == 404
+
+
+def test_treasury_lists_wallets_with_onchain_balance(monkeypatch):
+    async def fake_balance(address):
+        return 12_340_000
+    monkeypatch.setattr(buyer_router.balances, "read_balance", fake_balance)
+    r = client("127.0.0.1").get("/buyer/treasury")
+    body = r.json()
+    assert r.status_code == 200 and body["wallets"], body
+    assert body["wallets"][0]["balance_usdc_onchain"] == 12.34
+    assert body["limits"]["approval_threshold_usdc"] > 0
+
+
+def test_treasury_is_owner_only():
+    assert client("203.0.113.7").get("/buyer/treasury").status_code == 403

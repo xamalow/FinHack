@@ -32,6 +32,10 @@ from x402.mechanisms.evm.signers import EthAccountSigner
 NETWORK = os.getenv("NETWORK", "eip155:84532")
 USDC_ADDRESS = os.getenv("USDC_ADDRESS", "0x036CbD53842c5426634e7929541eC2318f3dCF7e")
 EXPLORER_URL = os.getenv("EXPLORER_URL", "https://sepolia.basescan.org")
+RPC_URL = os.getenv("RPC_URL", "https://sepolia.base.org")
+BALANCE_OF_ABI = [{"name": "balanceOf", "type": "function", "stateMutability": "view",
+                   "inputs": [{"name": "account", "type": "address"}],
+                   "outputs": [{"name": "", "type": "uint256"}]}]
 LLM_MODEL = "claude-opus-5-5"
 MAX_ROUNDS = 3
 
@@ -61,6 +65,23 @@ def check_offer(price_usdc, remaining_usdc, limits):
     if to_atomic(price_usdc) > to_atomic(limits.approval_threshold_usdc):
         return True, True, f"price {price_usdc} above approval threshold {limits.approval_threshold_usdc}"
     return True, False, "within limits"
+
+
+def check_wallet_balance(price_usdc, balance_atomic):
+    """The agent never signs for more than its wallet holds. Returns a problem, or None if fine or unknown
+    (an unknown balance is not blocking: the facilitator's verify also refuses insufficient funds)."""
+    if balance_atomic is not None and to_atomic(price_usdc) > balance_atomic:
+        return f"wallet holds {balance_atomic / 1_000_000:.2f} USDC, price is {price_usdc}"
+    return None
+
+
+async def read_usdc_balance(address):
+    """The agent's own view of its wallet, read from the chain, never from the seller's gateway."""
+    from web3 import AsyncHTTPProvider, AsyncWeb3
+
+    w3 = AsyncWeb3(AsyncHTTPProvider(RPC_URL))
+    usdc = w3.eth.contract(address=AsyncWeb3.to_checksum_address(USDC_ADDRESS), abi=BALANCE_OF_ABI)
+    return await usdc.functions.balanceOf(AsyncWeb3.to_checksum_address(address)).call()
 
 
 def check_payment_required(required, offer_price_usdc, manifest_pay_to, remaining_usdc, limits):
@@ -182,6 +203,7 @@ class BuyerAgent:
     approval_timeout_s: float = 300
     status: str = "created"
     spent_usdc: float = 0.0
+    wallet_atomic: int | None = None
     receipts: list = field(default_factory=list)
     data: list = field(default_factory=list)
     session_id: str | None = None
@@ -212,6 +234,20 @@ class BuyerAgent:
     def remaining_usdc(self):
         return self.limits.budget_usdc - self.spent_usdc
 
+    @property
+    def spendable_usdc(self):
+        """What the agent may still commit: its remaining budget, capped by what the wallet really holds."""
+        if self.wallet_atomic is None:
+            return self.remaining_usdc
+        return min(self.remaining_usdc, self.wallet_atomic / 1_000_000)
+
+    async def refresh_wallet(self):
+        try:
+            self.wallet_atomic = await read_usdc_balance(self.account.address)
+        except Exception:
+            pass
+        return self.wallet_atomic
+
     def emit(self, type, summary, payload=None):
         self.log_event(self.session_id, "buyer", type, summary, payload or {})
 
@@ -231,19 +267,22 @@ class BuyerAgent:
     def result(self):
         return {"status": self.status, "agent": self.account.address, "session_id": self.session_id,
                 "spent_usdc": round(self.spent_usdc, 6), "remaining_usdc": round(self.remaining_usdc, 6),
-                "receipts": self.receipts, "data": self.data, "pending_offer": self.pending_offer}
+                "receipts": self.receipts, "data": self.data, "pending_offer": self.pending_offer,
+                "wallet_usdc_onchain": None if self.wallet_atomic is None else self.wallet_atomic / 1_000_000}
 
     async def decide(self, reply):
         if self.llm is not None:
-            return await llm_decision(self.llm, self.mission, self.remaining_usdc, reply)
-        return rule_based_decision(self.mission, self.remaining_usdc, reply)
+            return await llm_decision(self.llm, self.mission, self.spendable_usdc, reply)
+        return rule_based_decision(self.mission, self.spendable_usdc, reply)
 
     async def run(self):
         self.status = "running"
+        await self.refresh_wallet()
         self.emit("mission_started", f"Mission: {self.mission[:80]}",
                   {"mission": self.mission, "budget_usdc": self.limits.budget_usdc,
                    "max_per_tx_usdc": self.limits.max_per_tx_usdc,
-                   "approval_threshold_usdc": self.limits.approval_threshold_usdc, "wallet": self.account.address})
+                   "approval_threshold_usdc": self.limits.approval_threshold_usdc, "wallet": self.account.address,
+                   "wallet_usdc_onchain": None if self.wallet_atomic is None else self.wallet_atomic / 1_000_000})
         ids = {"X-Agent-Id": self.agent_id, "X-Agent-Wallet": self.account.address}
         async with httpx.AsyncClient(timeout=90) as http:
             manifest = (await http.get(self.manifest_url)).json()
@@ -275,7 +314,7 @@ class BuyerAgent:
                 # Hard limits first, in code: an offer over budget or cap never reaches the LLM.
                 if offer:
                     price = float(offer["price_usdc"])
-                    ok, needs_approval, reason = check_offer(price, self.remaining_usdc, self.limits)
+                    ok, needs_approval, reason = check_offer(price, self.spendable_usdc, self.limits)
                     if not ok:
                         self.emit("offer_refused_budget", f"Refused {price} USDC: {reason}", {"offer": offer})
                         return self.finish("refused", f"Refused by budget rules: {reason}")
@@ -316,7 +355,10 @@ class BuyerAgent:
         if r.status_code != 402 or "payment-required" not in r.headers:
             return self.finish("failed", f"Expected 402, got {r.status_code}")
         required = decode_payment_required_header(r.headers["payment-required"])
-        problems = check_payment_required(required, price, pay_to, self.remaining_usdc, self.limits)
+        problems = check_payment_required(required, price, pay_to, self.spendable_usdc, self.limits)
+        low_balance = check_wallet_balance(price, await self.refresh_wallet())
+        if low_balance:
+            problems.append(low_balance)
         if problems:
             self.emit("offer_refused_budget", "402 rejected before signing: " + "; ".join(problems),
                       {"payment_required": required.model_dump(by_alias=True), "problems": problems})
@@ -338,6 +380,8 @@ class BuyerAgent:
         settle = decode_payment_response_header(r.headers["payment-response"])
         body = r.json()
         self.spent_usdc += price
+        if self.wallet_atomic is not None:
+            self.wallet_atomic -= to_atomic(price)
         receipt = {"offer_id": offer["offer_id"], "tx_hash": settle.transaction, "amount_usdc": price,
                    "explorer": f"{EXPLORER_URL}/tx/{settle.transaction}"}
         self.receipts.append(receipt)
