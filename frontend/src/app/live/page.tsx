@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button, Card, TxLink, AddressLink, shortHex } from "@/components/ui";
 import * as api from "@/lib/api";
-import { BUYER_WALLET } from "@/lib/config";
+import { BUYER_WALLET, USE_MOCKS } from "@/lib/config";
 import { PHASES, labelFor, type Tone } from "@/lib/eventLabels";
 import type { Actor, AppEvent } from "@/lib/types";
 import { useEventStream } from "@/lib/useEventStream";
@@ -13,6 +13,9 @@ const COLUMNS: { title: string; subtitle: string; actors: Actor[] }[] = [
   { title: "🏪 Publisher platform", subtitle: "Checks identity, negotiates, collects payment", actors: ["gateway", "sales_agent", "facilitator"] },
   { title: "⛓️ Blockchain", subtitle: "Public record of every payment (Base Sepolia)", actors: ["chain"] },
 ];
+
+const ASSISTANT_PROMPT =
+  "Use finhack-buyer to find the 2025 European market share of the leading battery manufacturer. Tell me the price before buying.";
 
 const PRESETS = [
   { label: "💵 Small purchase, 0.10 USDC", mission: "Find the 2025 European market share of the leading battery manufacturer." },
@@ -49,6 +52,7 @@ export default function LiveView() {
   const [balances, setBalances] = useState<{ buyer: number | null; publisher: number | null }>({ buyer: null, publisher: null });
   const [flash, setFlash] = useState(false);
   const [buyerWallet, setBuyerWallet] = useState(BUYER_WALLET);
+  const [copied, setCopied] = useState(false);
 
   const lastBuyer = useRef<number | null>(null);
   const refreshBalances = useCallback(async () => {
@@ -150,48 +154,66 @@ export default function LiveView() {
   return (
     <div className="space-y-4">
       <Card>
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
-          <label className="flex-1 text-xs text-muted">
-            What the agent must find
-            <input
-              value={mission}
-              onChange={(e) => setMission(e.target.value)}
-              className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent"
-            />
-          </label>
-          <label className="text-xs text-muted">
-            Budget it may spend (USDC)
-            <input
-              type="number"
-              step="0.1"
-              min="0"
-              value={budget}
-              onChange={(e) => setBudget(Number(e.target.value))}
-              className="mt-1 block w-28 rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent"
-            />
-          </label>
-          <Button onClick={run} disabled={running || !mission.trim()}>
-            {running ? "Running…" : "Run agent"}
-          </Button>
-          <Button variant="ghost" onClick={replay} disabled={running}>
-            🔁 Replay last payment
-          </Button>
+        <div className="flex flex-wrap items-start gap-4">
+          <div className="min-w-0 flex-1">
+            <h1 className="text-lg font-semibold">Waiting for an AI agent</h1>
+            <p className="text-sm text-muted">Any assistant with the finhack-buyer connector can buy. For example, ask Claude:</p>
+            <div className="mt-2 flex items-center gap-2 rounded-lg bg-surface-2 px-3 py-2 text-sm">
+              <span className="flex-1">“{ASSISTANT_PROMPT}”</span>
+              <button
+                onClick={() => void navigator.clipboard?.writeText(ASSISTANT_PROMPT).then(() => setCopied(true))}
+                className="shrink-0 text-xs text-accent hover:underline"
+              >
+                {copied ? "Copied" : "Copy"}
+              </button>
+            </div>
+          </div>
           <Button variant="ghost" onClick={() => setSince(events.length)}>
             Clear
           </Button>
         </div>
-        <div className="mt-3 flex flex-wrap items-center gap-2">
-          <span className="text-xs text-muted">Scenarios:</span>
-          {PRESETS.map((p) => (
-            <button
-              key={p.label}
-              onClick={() => setMission(p.mission)}
-              className={`rounded-full border px-3 py-1 text-xs transition ${mission === p.mission ? "border-accent bg-accent/10 text-accent" : "border-border text-muted hover:text-foreground"}`}
-            >
-              {p.label}
-            </button>
-          ))}
-        </div>
+
+        <details open={USE_MOCKS} className="mt-4 rounded-lg border border-border p-3">
+          <summary className="cursor-pointer text-sm font-medium">No assistant at hand? Run our test agent</summary>
+          <div className="mt-3 flex flex-col gap-3 lg:flex-row lg:items-end">
+            <label className="flex-1 text-xs text-muted">
+              Mission
+              <input
+                value={mission}
+                onChange={(e) => setMission(e.target.value)}
+                className="mt-1 w-full rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent"
+              />
+            </label>
+            <label className="text-xs text-muted">
+              Budget (USDC)
+              <input
+                type="number"
+                step="0.1"
+                min="0"
+                value={budget}
+                onChange={(e) => setBudget(Number(e.target.value))}
+                className="mt-1 block w-24 rounded-lg border border-border bg-background px-3 py-2 text-sm text-foreground outline-none focus:border-accent"
+              />
+            </label>
+            <Button onClick={run} disabled={running || !mission.trim()}>
+              {running ? "Running…" : "Run test agent"}
+            </Button>
+            <Button variant="ghost" onClick={replay} disabled={running}>
+              🔁 Replay last payment
+            </Button>
+          </div>
+          <div className="mt-3 flex flex-wrap gap-2">
+            {PRESETS.map((p) => (
+              <button
+                key={p.label}
+                onClick={() => setMission(p.mission)}
+                className={`rounded-full border px-3 py-1 text-xs transition ${mission === p.mission ? "border-accent bg-accent/10 text-accent" : "border-border text-muted hover:text-foreground"}`}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+        </details>
         {error && <p className="mt-3 text-sm text-bad">{error}</p>}
       </Card>
 
@@ -254,7 +276,7 @@ function EventList({ events, onSelect }: { events: AppEvent[]; onSelect: (e: App
     void end.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
   }, [events.length]);
 
-  if (!events.length) return <p className="text-sm text-muted">Nothing yet. Press Run agent to start.</p>;
+  if (!events.length) return <p className="text-sm text-muted">Nothing yet.</p>;
   return (
     <div className="max-h-[60vh] space-y-2 overflow-y-auto pr-1">
       {events.map((e, i) => {
@@ -361,7 +383,7 @@ function NowBanner({ latest }: { latest: AppEvent | null }) {
             {l.explain && <span className="text-muted"> · {l.explain}</span>}
           </span>
         ) : (
-          <span className="text-muted">Choose a scenario below the mission and press Run agent.</span>
+          <span className="text-muted">Nothing yet. Ask your AI assistant, or run the test agent.</span>
         )}
       </div>
     </div>
