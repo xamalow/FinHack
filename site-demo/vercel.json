@@ -1,0 +1,9 @@
+{
+  "framework": null,
+  "installCommand": "",
+  "buildCommand": "",
+  "outputDirectory": "public",
+  "rewrites": [
+    { "source": "/.well-known/ai-data.json", "destination": "https://GATEWAY_PUBLIC_URL/.well-known/ai-data.json" }
+  ]
+}

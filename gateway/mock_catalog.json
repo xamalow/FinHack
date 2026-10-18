@@ -1,0 +1,27 @@
+{
+  "_note": "P2 placeholder used only until P1's ingestion package is importable. Figures in 'content' are invented.",
+  "catalog": [
+    {"content_id": "rpt_battery_2025#s1", "report_id": "rpt_battery_2025", "title": "European battery manufacturers, market share 2025", "section": "Executive summary", "topic": "batteries", "region": "Europe", "period": "2025", "data_types": ["summary"], "sensitivity": "public", "status": "free", "suggested_tier": null},
+    {"content_id": "rpt_battery_2025#s2", "report_id": "rpt_battery_2025", "title": "European battery manufacturers, market share 2025", "section": "Market share by manufacturer", "topic": "batteries", "region": "Europe", "period": "2025", "data_types": ["market_share", "company_level"], "sensitivity": "proprietary", "status": "sellable", "suggested_tier": "small_table"},
+    {"content_id": "rpt_battery_2025#s3", "report_id": "rpt_battery_2025", "title": "European battery manufacturers, market share 2025", "section": "Methodology and full manufacturer ranking", "topic": "batteries", "region": "Europe", "period": "2025", "data_types": ["market_share", "methodology"], "sensitivity": "proprietary", "status": "sellable", "suggested_tier": "full_section"},
+    {"content_id": "rpt_battery_2025#s4", "report_id": "rpt_battery_2025", "title": "European battery manufacturers, market share 2025", "section": "Production volumes by plant", "topic": "batteries", "region": "Europe", "period": "2025", "data_types": ["production_volume", "plant_level"], "sensitivity": "proprietary", "status": "sellable", "suggested_tier": "small_table"},
+    {"content_id": "rpt_lithium_costs_2025#s1", "report_id": "rpt_lithium_costs_2025", "title": "Lithium carbonate cost curve 2021 to 2025", "section": "Average cost per tonne by year", "topic": "lithium", "region": "Global", "period": "2021-2025", "data_types": ["cost", "time_series"], "sensitivity": "proprietary", "status": "sellable", "suggested_tier": "small_table"},
+    {"content_id": "rpt_lithium_costs_2025#s2", "report_id": "rpt_lithium_costs_2025", "title": "Lithium carbonate cost curve 2021 to 2025", "section": "Cost by producing country", "topic": "lithium", "region": "Global", "period": "2025", "data_types": ["cost", "country_level"], "sensitivity": "proprietary", "status": "sellable", "suggested_tier": "small_table"},
+    {"content_id": "rpt_gigafactory_2025#s1", "report_id": "rpt_gigafactory_2025", "title": "European gigafactory capacity outlook", "section": "Installed capacity by site", "topic": "gigafactories", "region": "Europe", "period": "2025", "data_types": ["capacity", "plant_level"], "sensitivity": "proprietary", "status": "sellable", "suggested_tier": "small_table"},
+    {"content_id": "rpt_gigafactory_2025#s2", "report_id": "rpt_gigafactory_2025", "title": "European gigafactory capacity outlook", "section": "Capacity forecast to 2030 with methodology", "topic": "gigafactories", "region": "Europe", "period": "2025-2030", "data_types": ["capacity", "forecast", "methodology"], "sensitivity": "proprietary", "status": "sellable", "suggested_tier": "full_section"},
+    {"content_id": "rpt_recycling_2025#s1", "report_id": "rpt_recycling_2025", "title": "Battery recycling rates in Europe", "section": "Recycling rate by country", "topic": "recycling", "region": "Europe", "period": "2025", "data_types": ["rate", "country_level"], "sensitivity": "proprietary", "status": "sellable", "suggested_tier": "small_table"},
+    {"content_id": "page_internal_notes", "report_id": "internal_notes", "title": "Internal notes", "section": "Analyst working notes", "topic": "internal", "region": "Global", "period": "2025", "data_types": ["notes"], "sensitivity": "sensitive", "status": "excluded", "suggested_tier": null}
+  ],
+  "content": {
+    "rpt_battery_2025#s1": "Overview of the European battery market in 2025. Market concentration increased.",
+    "rpt_battery_2025#s2": "Market share 2025: Voltacell 31.4%, Nordbatt 22.7%, Lumion 14.2%, Ferrix 9.8%, Kestrel Energy 6.1%.",
+    "rpt_battery_2025#s3": "Methodology: shipments in GWh, 41 plants surveyed. Full ranking: Voltacell 31.4%, Nordbatt 22.7%, Lumion 14.2%, Ferrix 9.8%, Kestrel Energy 6.1%, Others 15.8%.",
+    "rpt_battery_2025#s4": "Production volumes: Voltacell Gdansk 48.3 GWh, Nordbatt Skelleftea 36.9 GWh, Lumion Metz 21.6 GWh.",
+    "rpt_lithium_costs_2025#s1": "Average lithium carbonate cost per tonne: 2021 7,412 USD, 2022 9,138 USD, 2023 8,264 USD, 2024 6,977 USD, 2025 6,415 USD.",
+    "rpt_lithium_costs_2025#s2": "Cost per tonne 2025: Chile 5,820 USD, Australia 7,145 USD, Argentina 6,033 USD, China 6,874 USD.",
+    "rpt_gigafactory_2025#s1": "Installed capacity: Gdansk 52.5 GWh, Skelleftea 40.2 GWh, Metz 24.8 GWh, Salzgitter 19.6 GWh.",
+    "rpt_gigafactory_2025#s2": "Forecast 2030 capacity 612.7 GWh, CAGR 27.3%. Methodology: announced projects weighted by financing stage.",
+    "rpt_recycling_2025#s1": "Recycling rate 2025: Germany 61.2%, France 54.9%, Poland 38.4%, Spain 41.7%.",
+    "page_internal_notes": "Internal: client Atlas Capital pays 18,500 EUR retainer. Draft margin 43.6%."
+  }
+}

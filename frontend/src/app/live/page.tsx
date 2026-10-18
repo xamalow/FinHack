@@ -129,6 +129,15 @@ export default function LiveView() {
     }
   };
 
+  const replay = async () => {
+    setError(null);
+    try {
+      await api.replayLastPayment();
+    } catch (e) {
+      setError(String(e));
+    }
+  };
+
   const approve = async () => {
     if (!pendingApproval) return;
     try {
@@ -163,6 +172,9 @@ export default function LiveView() {
           </label>
           <Button onClick={run} disabled={running || !mission.trim()}>
             {running ? "Running…" : "Run agent"}
+          </Button>
+          <Button variant="ghost" onClick={replay} disabled={running}>
+            🔁 Replay last payment
           </Button>
           <Button variant="ghost" onClick={() => setSince(events.length)}>
             Clear

@@ -1,0 +1,490 @@
+{
+  "firm": {
+    "name": "Velstrand Research",
+    "tagline": "Independent research on the European battery value chain",
+    "about": [
+      "Velstrand Research is an independent research firm covering the European battery value chain, from lithium supply to cell manufacturing and gigafactory build-out.",
+      "Our analysts combine plant-level shipment data, customs records and interviews with industry contacts to publish proprietary market data used by investors, automakers and utilities.",
+      "Velstrand Research is a fictional company created for a hackathon demo. Every company name and every figure on this site is invented."
+    ]
+  },
+  "reports": [
+    {
+      "report_id": "rpt_battery_2025",
+      "title": "European battery manufacturers, market share 2025",
+      "topic": "batteries",
+      "region": "Europe",
+      "period": "2025",
+      "article": {
+        "slug": "battery-market-share-2025",
+        "title": "Who leads European battery manufacturing in 2025?",
+        "paragraphs": [
+          "European lithium-ion cell output kept growing in 2025, but the gains were unevenly shared. The market leader extended its lead while the second largest player lost ground to a fast-growing challenger.",
+          "Central Europe remained the production heart of the continent, ahead of Germany and the Nordics. Utilisation rates improved everywhere but stay well below Asian benchmarks.",
+          "Our full report breaks down market share by manufacturer, output and utilisation by country, and explains our methodology."
+        ]
+      },
+      "sections": [
+        {
+          "title": "Executive summary",
+          "paragraphs": [
+            "European lithium-ion cell output reached 235.6 GWh in 2025, up 18.7% year on year.",
+            "The five largest manufacturers held 88.9% of European output. Aurelion Cells extended its lead to 31.4% of the market, while Kestrel Energy Storage slipped to 22.7%.",
+            "Brightwell Power was the fastest-growing manufacturer, gaining 3.4 points of market share."
+          ]
+        },
+        {
+          "title": "Market share by manufacturer",
+          "paragraphs": [
+            "Share of European lithium-ion cell output by manufacturer, 2025, and change versus 2024 in percentage points."
+          ],
+          "table": {
+            "columns": [
+              "Manufacturer",
+              "Share 2025 (%)",
+              "Change vs 2024 (pts)"
+            ],
+            "rows": [
+              [
+                "Aurelion Cells",
+                "31.4",
+                "+2.4"
+              ],
+              [
+                "Kestrel Energy Storage",
+                "22.7",
+                "-1.6"
+              ],
+              [
+                "Valmora Batteries",
+                "14.9",
+                "+0.8"
+              ],
+              [
+                "Brightwell Power",
+                "11.3",
+                "+3.4"
+              ],
+              [
+                "Ferrovolt",
+                "8.6",
+                "+1.1"
+              ],
+              [
+                "Others",
+                "11.1",
+                "-6.1"
+              ]
+            ]
+          }
+        },
+        {
+          "title": "Output and utilisation by country",
+          "paragraphs": [
+            "Lithium-ion cell output and average plant utilisation by country, 2025. Poland alone produced 86.3 GWh."
+          ],
+          "table": {
+            "columns": [
+              "Country",
+              "Output 2025 (GWh)",
+              "Utilisation (%)"
+            ],
+            "rows": [
+              [
+                "Poland",
+                "86.3",
+                "78.4"
+              ],
+              [
+                "Hungary",
+                "58.7",
+                "71.2"
+              ],
+              [
+                "Germany",
+                "47.2",
+                "64.9"
+              ],
+              [
+                "Sweden",
+                "23.8",
+                "52.7"
+              ],
+              [
+                "France",
+                "19.6",
+                "58.3"
+              ]
+            ]
+          }
+        },
+        {
+          "title": "Methodology",
+          "paragraphs": [
+            "Market shares are computed on cell output in GWh, not on revenue. Output is estimated from plant-level shipment data for 27 production sites, cross-checked with customs records.",
+            "We conducted 43 interviews with plant managers, procurement teams and equipment suppliers between January and November 2025. Figures are rounded to one decimal place."
+          ]
+        }
+      ],
+      "published": "December 2025",
+      "questions": [
+        "Which manufacturers lead European lithium-ion cell production, and who is gaining ground?",
+        "Which countries produce the most cells, and how well are their plants utilised?",
+        "How are market shares measured and cross-checked?"
+      ]
+    },
+    {
+      "report_id": "rpt_lithium_2025",
+      "title": "Lithium carbonate and hydroxide prices and costs, 2021-2025",
+      "topic": "lithium",
+      "region": "Global",
+      "period": "2021-2025",
+      "article": {
+        "slug": "lithium-prices-2021-2025",
+        "title": "Lithium prices: five years from boom to bust",
+        "paragraphs": [
+          "Lithium prices went through a full cycle between 2021 and 2025: a spectacular spike, then a long decline that continued through 2025.",
+          "The hydroxide premium over carbonate narrowed but did not disappear. At current prices, the highest-cost hard rock producers are under pressure while brine producers keep comfortable margins.",
+          "Our full report gives annual spot prices for carbonate and hydroxide and a cash cost curve for the main producers."
+        ]
+      },
+      "sections": [
+        {
+          "title": "Executive summary",
+          "paragraphs": [
+            "The average lithium carbonate spot price fell 18.5% in 2025 to 10,980 USD per tonne, far below the 2022 peak of 71,850 USD per tonne.",
+            "The hydroxide premium over carbonate averaged 660 USD per tonne in 2025.",
+            "Copperhead Spodumene, the highest-cost producer in our sample, operated with a cash cost of 8,315 USD per tonne."
+          ]
+        },
+        {
+          "title": "Spot prices by year",
+          "paragraphs": [
+            "Average annual spot prices, battery grade, USD per tonne of lithium carbonate equivalent."
+          ],
+          "table": {
+            "columns": [
+              "Year",
+              "Carbonate (USD/t)",
+              "Hydroxide (USD/t)"
+            ],
+            "rows": [
+              [
+                "2021",
+                "17,340",
+                "18,910"
+              ],
+              [
+                "2022",
+                "71,850",
+                "74,260"
+              ],
+              [
+                "2023",
+                "46,120",
+                "44,730"
+              ],
+              [
+                "2024",
+                "13,470",
+                "14,690"
+              ],
+              [
+                "2025",
+                "10,980",
+                "11,640"
+              ]
+            ]
+          }
+        },
+        {
+          "title": "Cash cost by producer",
+          "paragraphs": [
+            "Estimated 2025 cash cost by producer, USD per tonne of lithium carbonate equivalent, and resource type."
+          ],
+          "table": {
+            "columns": [
+              "Producer",
+              "Resource",
+              "Cash cost 2025 (USD/t)"
+            ],
+            "rows": [
+              [
+                "Altiplano Brine Co.",
+                "Brine",
+                "4,960"
+              ],
+              [
+                "Salar Andino Minerals",
+                "Brine",
+                "5,870"
+              ],
+              [
+                "Lagoa Lithium",
+                "Hard rock",
+                "6,640"
+              ],
+              [
+                "Redgum Lithium",
+                "Hard rock",
+                "7,420"
+              ],
+              [
+                "Copperhead Spodumene",
+                "Hard rock",
+                "8,315"
+              ]
+            ]
+          }
+        },
+        {
+          "title": "Methodology",
+          "paragraphs": [
+            "Spot prices are averages of weekly assessments from 52 trading weeks per year, collected from 14 traders and converters.",
+            "Cash costs include mining, processing, royalties and logistics to port, and exclude sustaining capital. They are built bottom-up from company disclosures and 19 expert interviews."
+          ]
+        }
+      ],
+      "published": "November 2025",
+      "questions": [
+        "How did carbonate and hydroxide spot prices move from the boom to the bust?",
+        "How wide is the hydroxide premium over carbonate today?",
+        "Which producers are under pressure at current prices, brine or hard rock?"
+      ]
+    },
+    {
+      "report_id": "rpt_gigafactory_2025",
+      "title": "European gigafactory capacity, 2025 and 2030 pipeline",
+      "topic": "gigafactories",
+      "region": "Europe",
+      "period": "2025-2030",
+      "article": {
+        "slug": "gigafactory-capacity-2025",
+        "title": "Europe's gigafactory build-out: where the capacity really is",
+        "paragraphs": [
+          "Announced gigafactory projects in Europe far exceed the capacity that is actually operational today. A handful of sites account for most of the real output.",
+          "The 2030 pipeline remains ambitious, but several projects have slipped and investment per GWh varies widely from one site to another.",
+          "Our full report lists operational capacity by site in 2025, the planned 2030 capacity and the associated investment."
+        ]
+      },
+      "sections": [
+        {
+          "title": "Executive summary",
+          "paragraphs": [
+            "The five largest operational gigafactories in Europe had a combined nameplate capacity of 135.9 GWh per year in 2025.",
+            "The same five sites plan to reach 268.9 GWh per year by 2030, for a total announced investment of 16.96 billion EUR."
+          ]
+        },
+        {
+          "title": "Operational capacity by site, 2025",
+          "paragraphs": [
+            "Nameplate capacity of operational sites at the end of 2025, GWh per year."
+          ],
+          "table": {
+            "columns": [
+              "Site",
+              "Operator",
+              "Capacity 2025 (GWh/yr)"
+            ],
+            "rows": [
+              [
+                "Gdansk",
+                "Aurelion Cells",
+                "42.5"
+              ],
+              [
+                "Debrecen",
+                "Kestrel Energy Storage",
+                "36.8"
+              ],
+              [
+                "Magdeburg",
+                "Valmora Batteries",
+                "27.3"
+              ],
+              [
+                "Lulea",
+                "Brightwell Power",
+                "16.4"
+              ],
+              [
+                "Dunkirk",
+                "Ferrovolt",
+                "12.9"
+              ]
+            ]
+          }
+        },
+        {
+          "title": "Planned capacity and investment, 2030",
+          "paragraphs": [
+            "Planned nameplate capacity in 2030 and announced investment for the same sites."
+          ],
+          "table": {
+            "columns": [
+              "Site",
+              "Planned 2030 (GWh/yr)",
+              "Investment (EUR bn)"
+            ],
+            "rows": [
+              [
+                "Gdansk",
+                "78.2",
+                "4.85"
+              ],
+              [
+                "Debrecen",
+                "64.5",
+                "3.92"
+              ],
+              [
+                "Magdeburg",
+                "51.6",
+                "3.37"
+              ],
+              [
+                "Lulea",
+                "33.9",
+                "2.64"
+              ],
+              [
+                "Dunkirk",
+                "40.7",
+                "2.18"
+              ]
+            ]
+          }
+        },
+        {
+          "title": "Methodology",
+          "paragraphs": [
+            "Operational capacity counts only production lines that shipped cells to customers in 2025. Announced projects without a final investment decision are excluded.",
+            "Data comes from site visits, operator disclosures and permits filed in 11 countries."
+          ]
+        }
+      ],
+      "published": "December 2025",
+      "questions": [
+        "Which European gigafactories are actually operational, and at what scale?",
+        "How much capacity do the leading sites plan to add by 2030?",
+        "How much investment is committed per site?"
+      ]
+    },
+    {
+      "report_id": "rpt_sodium_2025",
+      "title": "Sodium-ion batteries in Europe, cost and adoption outlook 2025",
+      "topic": "sodium-ion",
+      "region": "Europe",
+      "period": "2025-2030",
+      "article": {
+        "slug": "sodium-ion-outlook-2025",
+        "title": "Sodium-ion: a real alternative to lithium?",
+        "paragraphs": [
+          "Sodium-ion cells are still more expensive than LFP today, but the gap is expected to close before the end of the decade.",
+          "Adoption will start in segments where energy density matters less, such as stationary storage and two-wheelers, well before mainstream electric cars.",
+          "Our full report compares cell costs with LFP and NMC and gives adoption forecasts by segment for 2030."
+        ]
+      },
+      "sections": [
+        {
+          "title": "Executive summary",
+          "paragraphs": [
+            "Sodium-ion cells cost 87.4 USD per kWh in 2025, 21.6% more than LFP cells.",
+            "We expect sodium-ion to become cheaper than LFP by 2030, at 52.3 USD per kWh, and to reach 41.2% of new two-wheeler batteries in Europe."
+          ]
+        },
+        {
+          "title": "Cell cost comparison",
+          "paragraphs": [
+            "Average cell cost by chemistry, USD per kWh, 2025 actual and 2030 forecast."
+          ],
+          "table": {
+            "columns": [
+              "Chemistry",
+              "Cost 2025 (USD/kWh)",
+              "Cost 2030 (USD/kWh)"
+            ],
+            "rows": [
+              [
+                "Sodium-ion",
+                "87.4",
+                "52.3"
+              ],
+              [
+                "LFP",
+                "71.9",
+                "58.8"
+              ],
+              [
+                "NMC",
+                "98.6",
+                "79.4"
+              ]
+            ]
+          }
+        },
+        {
+          "title": "Adoption forecast by segment, 2030",
+          "paragraphs": [
+            "Forecast share of sodium-ion in new battery demand in Europe by segment, 2030."
+          ],
+          "table": {
+            "columns": [
+              "Segment",
+              "Sodium-ion share 2030 (%)"
+            ],
+            "rows": [
+              [
+                "Two-wheelers",
+                "41.2"
+              ],
+              [
+                "Stationary storage",
+                "23.6"
+              ],
+              [
+                "Entry-level electric cars",
+                "9.7"
+              ],
+              [
+                "Light commercial vans",
+                "6.4"
+              ]
+            ]
+          }
+        },
+        {
+          "title": "Methodology",
+          "paragraphs": [
+            "Cell costs are bottom-up estimates built from material prices, plant throughput and yield assumptions validated with 8 cell manufacturers.",
+            "Adoption forecasts combine announced supply agreements with a demand model calibrated on 36 product launches."
+          ]
+        }
+      ],
+      "published": "October 2025",
+      "questions": [
+        "How do sodium-ion cell costs compare with LFP and NMC today?",
+        "When could sodium-ion become cheaper than LFP?",
+        "In which segments will sodium-ion be adopted first?"
+      ]
+    }
+  ],
+  "internal_notes": {
+    "path": "internal-notes.html",
+    "title": "Internal notes",
+    "paragraphs": [
+      "Internal use only. Not for publication or redistribution.",
+      "Draft revision: the Aurelion Cells market share may be revised to 32.1% after the Q4 audit of the Gdansk plant. Do not share before sign-off.",
+      "Client pipeline: the Nordic utility renewal is under negotiation at 48,500 EUR per year. The automaker pilot is priced at 27,750 EUR.",
+      "Source protection: two of our Debrecen contacts asked not to be quoted. Their capacity estimate of 39.4 GWh per year is used only to cross-check our model."
+    ]
+  },
+  "draft": {
+    "path": "drafts/sodium-ion-draft.html",
+    "title": "Draft, sodium-ion outlook (unpublished)",
+    "paragraphs": [
+      "Work in progress. This page is blocked for crawlers in robots.txt.",
+      "Early estimate of sodium-ion cell cost for 2026: 79.8 USD per kWh."
+    ]
+  }
+}

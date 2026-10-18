@@ -1,0 +1,338 @@
+[
+  {
+    "content_id": "rpt_battery_2025#s1",
+    "report_id": "rpt_battery_2025",
+    "title": "European battery manufacturers, market share 2025",
+    "section": "Executive summary",
+    "topic": "batteries",
+    "region": "Europe",
+    "period": "2025",
+    "data_types": [
+      "market_share",
+      "production_volume",
+      "summary"
+    ],
+    "sensitivity": "proprietary",
+    "status": "sellable",
+    "suggested_tier": "single_fact"
+  },
+  {
+    "content_id": "rpt_battery_2025#s2",
+    "report_id": "rpt_battery_2025",
+    "title": "European battery manufacturers, market share 2025",
+    "section": "Market share by manufacturer",
+    "topic": "batteries",
+    "region": "Europe",
+    "period": "2025",
+    "data_types": [
+      "market_share",
+      "company_level"
+    ],
+    "sensitivity": "proprietary",
+    "status": "sellable",
+    "suggested_tier": "small_table"
+  },
+  {
+    "content_id": "rpt_battery_2025#s3",
+    "report_id": "rpt_battery_2025",
+    "title": "European battery manufacturers, market share 2025",
+    "section": "Output and utilisation by country",
+    "topic": "batteries",
+    "region": "Europe",
+    "period": "2025",
+    "data_types": [
+      "production_volume",
+      "utilisation_rate",
+      "country_level"
+    ],
+    "sensitivity": "proprietary",
+    "status": "sellable",
+    "suggested_tier": "small_table"
+  },
+  {
+    "content_id": "rpt_battery_2025#s4",
+    "report_id": "rpt_battery_2025",
+    "title": "European battery manufacturers, market share 2025",
+    "section": "Methodology",
+    "topic": "batteries",
+    "region": "Europe",
+    "period": "2025",
+    "data_types": [
+      "methodology"
+    ],
+    "sensitivity": "proprietary",
+    "status": "sellable",
+    "suggested_tier": "full_section"
+  },
+  {
+    "content_id": "rpt_battery_2025#article",
+    "report_id": "rpt_battery_2025",
+    "title": "Who leads European battery manufacturing in 2025?",
+    "section": "Free article",
+    "topic": "batteries",
+    "region": "Europe",
+    "period": "2025",
+    "data_types": [
+      "summary"
+    ],
+    "sensitivity": "public",
+    "status": "free",
+    "suggested_tier": null
+  },
+  {
+    "content_id": "rpt_lithium_2025#s1",
+    "report_id": "rpt_lithium_2025",
+    "title": "Lithium carbonate and hydroxide prices and costs, 2021-2025",
+    "section": "Executive summary",
+    "topic": "lithium",
+    "region": "Global",
+    "period": "2021-2025",
+    "data_types": [
+      "price",
+      "cost",
+      "summary"
+    ],
+    "sensitivity": "proprietary",
+    "status": "sellable",
+    "suggested_tier": "single_fact"
+  },
+  {
+    "content_id": "rpt_lithium_2025#s2",
+    "report_id": "rpt_lithium_2025",
+    "title": "Lithium carbonate and hydroxide prices and costs, 2021-2025",
+    "section": "Spot prices by year",
+    "topic": "lithium",
+    "region": "Global",
+    "period": "2021-2025",
+    "data_types": [
+      "price",
+      "time_series"
+    ],
+    "sensitivity": "proprietary",
+    "status": "sellable",
+    "suggested_tier": "small_table"
+  },
+  {
+    "content_id": "rpt_lithium_2025#s3",
+    "report_id": "rpt_lithium_2025",
+    "title": "Lithium carbonate and hydroxide prices and costs, 2021-2025",
+    "section": "Cash cost by producer",
+    "topic": "lithium",
+    "region": "Global",
+    "period": "2021-2025",
+    "data_types": [
+      "cost",
+      "company_level"
+    ],
+    "sensitivity": "proprietary",
+    "status": "sellable",
+    "suggested_tier": "small_table"
+  },
+  {
+    "content_id": "rpt_lithium_2025#s4",
+    "report_id": "rpt_lithium_2025",
+    "title": "Lithium carbonate and hydroxide prices and costs, 2021-2025",
+    "section": "Methodology",
+    "topic": "lithium",
+    "region": "Global",
+    "period": "2021-2025",
+    "data_types": [
+      "methodology"
+    ],
+    "sensitivity": "proprietary",
+    "status": "sellable",
+    "suggested_tier": "full_section"
+  },
+  {
+    "content_id": "rpt_lithium_2025#article",
+    "report_id": "rpt_lithium_2025",
+    "title": "Lithium prices: five years from boom to bust",
+    "section": "Free article",
+    "topic": "lithium",
+    "region": "Global",
+    "period": "2021-2025",
+    "data_types": [
+      "summary"
+    ],
+    "sensitivity": "public",
+    "status": "free",
+    "suggested_tier": null
+  },
+  {
+    "content_id": "rpt_gigafactory_2025#s1",
+    "report_id": "rpt_gigafactory_2025",
+    "title": "European gigafactory capacity, 2025 and 2030 pipeline",
+    "section": "Executive summary",
+    "topic": "gigafactories",
+    "region": "Europe",
+    "period": "2025-2030",
+    "data_types": [
+      "capacity",
+      "investment",
+      "summary"
+    ],
+    "sensitivity": "proprietary",
+    "status": "sellable",
+    "suggested_tier": "single_fact"
+  },
+  {
+    "content_id": "rpt_gigafactory_2025#s2",
+    "report_id": "rpt_gigafactory_2025",
+    "title": "European gigafactory capacity, 2025 and 2030 pipeline",
+    "section": "Operational capacity by site, 2025",
+    "topic": "gigafactories",
+    "region": "Europe",
+    "period": "2025-2030",
+    "data_types": [
+      "capacity",
+      "site_level",
+      "company_level"
+    ],
+    "sensitivity": "proprietary",
+    "status": "sellable",
+    "suggested_tier": "small_table"
+  },
+  {
+    "content_id": "rpt_gigafactory_2025#s3",
+    "report_id": "rpt_gigafactory_2025",
+    "title": "European gigafactory capacity, 2025 and 2030 pipeline",
+    "section": "Planned capacity and investment, 2030",
+    "topic": "gigafactories",
+    "region": "Europe",
+    "period": "2025-2030",
+    "data_types": [
+      "capacity",
+      "investment",
+      "forecast",
+      "site_level"
+    ],
+    "sensitivity": "proprietary",
+    "status": "sellable",
+    "suggested_tier": "small_table"
+  },
+  {
+    "content_id": "rpt_gigafactory_2025#s4",
+    "report_id": "rpt_gigafactory_2025",
+    "title": "European gigafactory capacity, 2025 and 2030 pipeline",
+    "section": "Methodology",
+    "topic": "gigafactories",
+    "region": "Europe",
+    "period": "2025-2030",
+    "data_types": [
+      "methodology"
+    ],
+    "sensitivity": "proprietary",
+    "status": "sellable",
+    "suggested_tier": "full_section"
+  },
+  {
+    "content_id": "rpt_gigafactory_2025#article",
+    "report_id": "rpt_gigafactory_2025",
+    "title": "Europe's gigafactory build-out: where the capacity really is",
+    "section": "Free article",
+    "topic": "gigafactories",
+    "region": "Europe",
+    "period": "2025-2030",
+    "data_types": [
+      "summary"
+    ],
+    "sensitivity": "public",
+    "status": "free",
+    "suggested_tier": null
+  },
+  {
+    "content_id": "rpt_sodium_2025#s1",
+    "report_id": "rpt_sodium_2025",
+    "title": "Sodium-ion batteries in Europe, cost and adoption outlook 2025",
+    "section": "Executive summary",
+    "topic": "sodium-ion",
+    "region": "Europe",
+    "period": "2025-2030",
+    "data_types": [
+      "cost",
+      "forecast",
+      "summary"
+    ],
+    "sensitivity": "proprietary",
+    "status": "sellable",
+    "suggested_tier": "single_fact"
+  },
+  {
+    "content_id": "rpt_sodium_2025#s2",
+    "report_id": "rpt_sodium_2025",
+    "title": "Sodium-ion batteries in Europe, cost and adoption outlook 2025",
+    "section": "Cell cost comparison",
+    "topic": "sodium-ion",
+    "region": "Europe",
+    "period": "2025-2030",
+    "data_types": [
+      "cost",
+      "forecast",
+      "technology_level"
+    ],
+    "sensitivity": "proprietary",
+    "status": "sellable",
+    "suggested_tier": "small_table"
+  },
+  {
+    "content_id": "rpt_sodium_2025#s3",
+    "report_id": "rpt_sodium_2025",
+    "title": "Sodium-ion batteries in Europe, cost and adoption outlook 2025",
+    "section": "Adoption forecast by segment, 2030",
+    "topic": "sodium-ion",
+    "region": "Europe",
+    "period": "2025-2030",
+    "data_types": [
+      "forecast",
+      "segment_level"
+    ],
+    "sensitivity": "proprietary",
+    "status": "sellable",
+    "suggested_tier": "small_table"
+  },
+  {
+    "content_id": "rpt_sodium_2025#s4",
+    "report_id": "rpt_sodium_2025",
+    "title": "Sodium-ion batteries in Europe, cost and adoption outlook 2025",
+    "section": "Methodology",
+    "topic": "sodium-ion",
+    "region": "Europe",
+    "period": "2025-2030",
+    "data_types": [
+      "methodology"
+    ],
+    "sensitivity": "proprietary",
+    "status": "sellable",
+    "suggested_tier": "full_section"
+  },
+  {
+    "content_id": "rpt_sodium_2025#article",
+    "report_id": "rpt_sodium_2025",
+    "title": "Sodium-ion: a real alternative to lithium?",
+    "section": "Free article",
+    "topic": "sodium-ion",
+    "region": "Europe",
+    "period": "2025-2030",
+    "data_types": [
+      "summary"
+    ],
+    "sensitivity": "public",
+    "status": "free",
+    "suggested_tier": null
+  },
+  {
+    "content_id": "page_internal_notes#s1",
+    "report_id": "page_internal_notes",
+    "title": "Internal notes",
+    "section": "Internal notes",
+    "topic": "internal",
+    "region": "Europe",
+    "period": "2025",
+    "data_types": [
+      "internal"
+    ],
+    "sensitivity": "internal",
+    "status": "excluded",
+    "suggested_tier": null
+  }
+]
