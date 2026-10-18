@@ -1,0 +1,8 @@
+httpx
+beautifulsoup4
+pymupdf
+anthropic
+pydantic>=2
+fastapi
+uvicorn
+pytest

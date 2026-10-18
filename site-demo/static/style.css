@@ -1,0 +1,72 @@
+:root {
+  --ink: #1b2430;
+  --muted: #5b6573;
+  --line: #dde2e8;
+  --accent: #0f5c8c;
+  --paper: #ffffff;
+  --wash: #f4f6f9;
+  --ok: #17663a;
+  --ok-wash: #e4f4ea;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: Georgia, "Times New Roman", serif;
+  color: var(--ink);
+  background: var(--paper);
+  line-height: 1.6;
+}
+
+a { color: var(--accent); }
+
+.site-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 16px max(16px, calc((100% - 960px) / 2));
+  border-bottom: 1px solid var(--line);
+  font-family: system-ui, sans-serif;
+}
+
+.brand { font-weight: 700; font-size: 1.15rem; color: var(--ink); text-decoration: none; letter-spacing: 0.02em; }
+.site-header nav a { margin-left: 20px; color: var(--muted); text-decoration: none; }
+
+main { max-width: 960px; margin: 0 auto; padding: 24px 16px 48px; }
+
+.hero { padding: 32px 0 16px; border-bottom: 1px solid var(--line); margin-bottom: 24px; }
+.hero h1 { margin: 0; font-size: 2.2rem; }
+.hero p { margin: 4px 0 0; color: var(--muted); font-size: 1.1rem; }
+
+.cards { list-style: none; padding: 0; display: grid; gap: 16px; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+.card { border: 1px solid var(--line); border-radius: 6px; padding: 16px; background: var(--wash); }
+.card h3 { margin: 6px 0; font-size: 1.15rem; }
+.card h3 a { color: var(--ink); text-decoration: none; }
+
+.tag { font-family: system-ui, sans-serif; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); }
+.pdf { font-family: system-ui, sans-serif; font-size: 0.9rem; }
+
+article { max-width: 680px; }
+
+.site-footer {
+  border-top: 1px solid var(--line);
+  padding: 20px max(16px, calc((100% - 960px) / 2));
+  font-family: system-ui, sans-serif;
+  font-size: 0.88rem;
+  color: var(--muted);
+}
+.disclaimer { font-size: 0.8rem; }
+
+#agent-banner {
+  font-family: system-ui, sans-serif;
+  font-size: 0.9rem;
+  padding: 10px 16px;
+  text-align: center;
+  background: var(--ok-wash);
+  color: var(--ok);
+  border-bottom: 1px solid #b9dfc6;
+}
+#agent-banner code { font-size: 0.85rem; }
