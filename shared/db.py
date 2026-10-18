@@ -169,14 +169,24 @@ def _decode(row: sqlite3.Row) -> dict[str, Any]:
     return out
 
 
+_initialized_paths: set[str] = set()
+
+
 def get_connection() -> sqlite3.Connection:
-    """Plain connection to the shared database file. The caller commits and closes it."""
+    """Plain connection to the shared database file. The caller commits and closes it.
+
+    The first connection to a file creates every table, so scripts and other
+    roles can call log_event() without running the gateway first.
+    """
     path = db_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(path, timeout=10)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode=WAL")
     conn.execute("PRAGMA foreign_keys=ON")
+    if str(path) not in _initialized_paths:
+        conn.executescript(SCHEMA)
+        _initialized_paths.add(str(path))
     return conn
 
 
