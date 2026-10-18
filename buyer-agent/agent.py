@@ -294,7 +294,8 @@ class BuyerAgent:
                 if needs_approval:
                     self.pending_offer = offer
                     self.status = "waiting_approval"
-                    self.emit("approval_requested", f"{price} USDC needs human approval", {"offer": offer})
+                    self.emit("approval_requested", f"{price} USDC needs human approval",
+                              {"offer_id": offer["offer_id"], "price_usdc": price, "offer": offer})
                     approved = await self.approvals.wait(offer["offer_id"], self.approval_timeout_s)
                     self.pending_offer = None
                     self.status = "running"

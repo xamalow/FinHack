@@ -22,7 +22,6 @@ BALANCE_OF_ABI = [{
 
 w3 = AsyncWeb3(AsyncHTTPProvider(config.RPC_URL))
 usdc = w3.eth.contract(address=AsyncWeb3.to_checksum_address(config.USDC_ADDRESS), abi=BALANCE_OF_ABI)
-WATCHERS = {}
 
 
 def is_address(address):
@@ -39,50 +38,50 @@ def fmt(atomic):
 
 
 class Watcher:
-    def __init__(self, session_id):
-        self.session_id = session_id
-        self.roles = {}
-        self.last = {}
-        self.deadline = 0
+    """One poll loop for all watched wallets. Each wallet is watched once, whatever the number of
+    sessions: a change is reported a single time, on the latest session that registered the wallet."""
+
+    def __init__(self):
+        self.wallets = {}  # address -> {"role", "session_id", "last", "deadline"}
         self.task = None
 
-    async def add(self, roles, ttl):
-        self.deadline = max(self.deadline, time.time() + ttl)
+    async def add(self, session_id, roles, ttl):
+        deadline = time.time() + ttl
         for role, address in roles.items():
             address = address.lower()
-            self.roles[address] = role
-            if address not in self.last:
-                self.last[address] = await read_balance(address)
+            entry = self.wallets.get(address)
+            if entry is None:
+                entry = self.wallets[address] = {"last": await read_balance(address), "deadline": 0}
+            entry.update(role=role, session_id=session_id, deadline=max(entry["deadline"], deadline))
         if self.task is None or self.task.done():
             self.task = asyncio.create_task(self.loop())
 
     async def loop(self):
-        try:
-            while time.time() < self.deadline:
-                await asyncio.sleep(POLL_SECONDS)
-                for address, role in list(self.roles.items()):
-                    try:
-                        balance = await read_balance(address)
-                    except Exception:
-                        continue
-                    old = self.last[address]
-                    if balance != old:
-                        self.last[address] = balance
-                        delta = balance - old
-                        deps.log_event(
-                            self.session_id, "chain", "balance_changed",
-                            f"{role.capitalize()} {'+' if delta > 0 else '-'}{fmt(abs(delta))} USDC (now {fmt(balance)})",
-                            {"address": AsyncWeb3.to_checksum_address(address), "role": role,
-                             "old_atomic": old, "new_atomic": balance, "delta_atomic": delta,
-                             "balance_usdc": balance / 1_000_000},
-                        )
-        finally:
-            WATCHERS.pop(self.session_id, None)
+        while self.wallets:
+            await asyncio.sleep(POLL_SECONDS)
+            for address, entry in list(self.wallets.items()):
+                try:
+                    balance = await read_balance(address)
+                except Exception:
+                    continue
+                old = entry["last"]
+                if balance != old:
+                    entry["last"] = balance
+                    delta = balance - old
+                    deps.log_event(
+                        entry["session_id"], "chain", "balance_changed",
+                        f"{entry['role'].capitalize()} {'+' if delta > 0 else '-'}{fmt(abs(delta))} USDC (now {fmt(balance)})",
+                        {"address": AsyncWeb3.to_checksum_address(address), "role": entry["role"],
+                         "old_atomic": old, "new_atomic": balance, "delta_atomic": delta,
+                         "balance_usdc": balance / 1_000_000},
+                    )
+                if time.time() > entry["deadline"]:
+                    self.wallets.pop(address, None)
+
+
+WATCHER = Watcher()
 
 
 async def watch(session_id, roles, ttl=WATCH_TTL_SECONDS):
-    """Start or extend the balance watch of a session. roles = {"buyer": addr, "publisher": addr}."""
-    watcher = WATCHERS.get(session_id)
-    if watcher is None:
-        watcher = WATCHERS[session_id] = Watcher(session_id)
-    await watcher.add(roles, ttl)
+    """Start or extend the balance watch of a session's wallets. roles = {"buyer": addr, "publisher": addr}."""
+    await WATCHER.add(session_id, roles, ttl)
