@@ -19,6 +19,7 @@ from x402.mechanisms.evm.exact import register_exact_evm_client
 from x402.mechanisms.evm.signers import EthAccountSigner
 
 from payments import config
+from shared.keys import load_private_key
 from payments.mock_p2 import DEV_TOKEN
 
 BASE = os.getenv("GATEWAY_URL", "http://127.0.0.1:4022")
@@ -40,7 +41,7 @@ async def sign_for(http, x402, route, offer_id):
 
 async def main():
     x402 = x402Client()
-    account = Account.from_key(os.environ["BUYER_PRIVATE_KEY_1"])
+    account = Account.from_key(load_private_key("BUYER_PRIVATE_KEY_1"))
     register_exact_evm_client(x402, EthAccountSigner(account), networks=config.NETWORK)
 
     async with httpx.AsyncClient(timeout=90) as http:

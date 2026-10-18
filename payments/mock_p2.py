@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 from eth_account import Account
 
 from payments import config
+from shared.keys import has_key, load_private_key
 
 TIERS = {
     "single_fact": 0.10,
@@ -29,8 +30,8 @@ SESSIONS = {
     DEV_TOKEN: {
         "session_id": "ses_dev",
         "agent_id": "agent_dev",
-        "wallet_address": Account.from_key(os.environ["BUYER_PRIVATE_KEY_1"]).address
-        if os.getenv("BUYER_PRIVATE_KEY_1") else "",
+        "wallet_address": Account.from_key(load_private_key("BUYER_PRIVATE_KEY_1")).address
+        if has_key("BUYER_PRIVATE_KEY_1") else "",
     }
 }
 

@@ -1,12 +1,16 @@
 """Print ETH and USDC balances on Base Sepolia for every wallet in .env."""
 import os
+import sys
 from pathlib import Path
 
 from dotenv import load_dotenv
 from eth_account import Account
 from web3 import Web3
 
-load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+ROOT = Path(__file__).resolve().parent.parent
+load_dotenv(ROOT / ".env")
+sys.path.insert(0, str(ROOT))
+from shared.keys import load_private_key  # noqa: E402
 
 RPC_URL = os.getenv("RPC_URL", "https://sepolia.base.org")
 USDC_ADDRESS = os.getenv("USDC_ADDRESS", "0x036CbD53842c5426634e7929541eC2318f3dCF7e")
@@ -22,9 +26,10 @@ def main():
     usdc = w3.eth.contract(address=Web3.to_checksum_address(USDC_ADDRESS), abi=BALANCE_OF_ABI)
     keys = ["PUBLISHER_PRIVATE_KEY"] + [f"BUYER_PRIVATE_KEY_{i}" for i in range(1, 5)]
     for key in keys:
-        if not os.getenv(key):
+        private_key = load_private_key(key)
+        if not private_key:
             continue
-        addr = Account.from_key(os.environ[key]).address
+        addr = Account.from_key(private_key).address
         eth = w3.from_wei(w3.eth.get_balance(addr), "ether")
         usdc_bal = usdc.functions.balanceOf(addr).call() / 1_000_000
         print(f"{key.replace('_PRIVATE_KEY', ''):<12} {addr}  {usdc_bal:>10.6f} USDC  {eth:.6f} ETH")

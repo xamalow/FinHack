@@ -17,6 +17,8 @@ from web3 import Web3
 
 ROOT = Path(__file__).resolve().parent.parent
 load_dotenv(ROOT / ".env")
+sys.path.insert(0, str(ROOT))
+from shared.keys import load_private_key  # noqa: E402
 
 NETWORK = os.getenv("NETWORK", "eip155:84532")
 RPC_URL = os.getenv("RPC_URL", "https://sepolia.base.org")
@@ -113,7 +115,7 @@ def main():
     if usdc is not None:
         print("== wallets (USDC on-chain)")
         for i in range(1, 5):
-            key = os.getenv(f"BUYER_PRIVATE_KEY_{i}")
+            key = load_private_key(f"BUYER_PRIVATE_KEY_{i}")
             if not key:
                 continue
             address = Account.from_key(key).address

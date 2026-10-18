@@ -132,7 +132,7 @@ The live view, the per-sale audit, the sales list, the stats and the compliance 
 | Publisher signing key | `PUBLISHER_SIGNING_KEY(_KEYSTORE)`. Without either, one is created once in `.publisher_signing_key` (mode 600, git-ignored), so buyers that pinned it keep trusting it after a restart. |
 | Code | `shared/keys.py`, `scripts/encrypt_keys.py`, used in `payments/buyer_router.py`, `buyer-mcp/server.py` and the `buyer-agent/agent.py` CLI. |
 | Tests | `test_private_key_loads_from_an_encrypted_keystore`, `test_encrypt_keys_script_removes_plaintext_from_the_env_file`. |
-| Not done | The team's real `.env` was **not** migrated. That is the user's choice: run `python scripts/encrypt_keys.py --apply`. Production target: a KMS or CDP server wallet (brief item 9). |
+| Done on 18 Oct (P3's machine) | `.env` migrated: 4 buyer keys + the generated publisher key are in `keys/*.json`, passwords in the Keychain, no plaintext key left in `.env`. Gateway, connector (e2e 13/13 from a keystore), preflight, `check_funds` and `create_wallets` all load them. `.env.mainnet` (real-money wallets) is not migrated yet: run `python scripts/encrypt_keys.py --env-file .env.mainnet --apply --rewrite-env`. Every teammate should run the script on their own machine. Production target: a KMS or CDP server wallet (brief item 9). |
 
 ### 3.3 Per-buyer watermark and leak tracing
 
@@ -222,7 +222,7 @@ These are already documented in [SECURITY_P3.md](../payments/docs/SECURITY_P3.md
 | # | Item | Owner |
 |---|---|---|
 | 1 | The demo site serves its paid PDFs as public files on Vercel: anyone can download what agents pay for. Move them out of `public/` and redeploy. | P1 |
-| 2 | Real `.env` keys are still in plaintext until `scripts/encrypt_keys.py --apply` is run. | team, on each machine |
+| 2 | Keys are encrypted on P3's machine (`.env`). `.env.mainnet` and the teammates' machines still need `scripts/encrypt_keys.py --apply --rewrite-env`. | team, on each machine |
 | 3 | Sanctions: OFAC only, through a free oracle. No EU, UN or UK lists, no risk scoring of counterparties (mixers, scams). | post-hackathon |
 | 4 | Travel rule (FATF R.16): not applied. Payments are far below the USD/EUR 1,000 threshold, and the parties are an agent and a merchant, not two VASPs. To revisit if Doubloon custodies funds. | post-hackathon |
 | 5 | Manifest trust is trust on first use (see 3.1). | post-hackathon |

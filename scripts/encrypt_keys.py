@@ -1,6 +1,6 @@
 """Move private keys out of an env file: encrypted keystore files + passwords in the macOS Keychain.
 
-For each key (BUYER_PRIVATE_KEY_*, MCP_BUYER_PRIVATE_KEY, PUBLISHER_SIGNING_KEY found in the env file):
+For each key (BUYER_PRIVATE_KEY_*, MCP_BUYER_PRIVATE_KEY, PUBLISHER_PRIVATE_KEY, PUBLISHER_SIGNING_KEY in the env file):
 - a random password is stored in the Keychain (service "doubloon", account = the variable name);
 - the key is written to keys/<NAME>.json as a Web3 Secret Storage v3 keystore (scrypt), mode 600;
 - with --rewrite-env, the plaintext line is replaced by NAME_KEYSTORE=keys/<NAME>.json
@@ -30,7 +30,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 from shared.keys import KEYCHAIN_SERVICE  # noqa: E402
 
-KEY_NAME = re.compile(r"^(BUYER_PRIVATE_KEY_\d+|MCP_BUYER_PRIVATE_KEY|PUBLISHER_SIGNING_KEY)$")
+KEY_NAME = re.compile(r"^(BUYER_PRIVATE_KEY_\d+|MCP_BUYER_PRIVATE_KEY|PUBLISHER_PRIVATE_KEY|PUBLISHER_SIGNING_KEY)$")
 
 
 def keychain_store(name, password):

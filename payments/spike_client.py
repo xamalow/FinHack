@@ -16,12 +16,14 @@ from x402.mechanisms.evm.exact import register_exact_evm_client
 from x402.mechanisms.evm.signers import EthAccountSigner
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from shared.keys import load_private_key  # noqa: E402
 
 EXPLORER_URL = os.getenv("EXPLORER_URL", "https://sepolia.basescan.org")
 
 
 async def main(url):
-    account = Account.from_key(os.environ["BUYER_PRIVATE_KEY_1"])
+    account = Account.from_key(load_private_key("BUYER_PRIVATE_KEY_1"))
     print("buyer", account.address)
 
     client = x402Client()

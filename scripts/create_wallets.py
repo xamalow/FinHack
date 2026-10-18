@@ -7,11 +7,15 @@ Existing keys are kept, so running it twice does not lose funded wallets.
     python scripts/create_wallets.py --env-file .env.mainnet --buyers 1   # dedicated mainnet wallets
 """
 import argparse
+import os
+import sys
 from pathlib import Path
 
 from eth_account import Account
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
+from shared.keys import load_private_key  # noqa: E402
 ENV_PATH = ROOT / ".env"
 KEYS = []
 
@@ -37,6 +41,9 @@ def main():
     env = read_env()
     new_lines = []
     for key in KEYS:
+        if env.get(f"{key}_KEYSTORE"):  # already moved to an encrypted keystore (scripts/encrypt_keys.py)
+            os.environ.setdefault(f"{key}_KEYSTORE", env[f"{key}_KEYSTORE"])
+            env[key] = load_private_key(key)
         if not env.get(key):
             acct = Account.create()
             env[key] = acct.key.hex()
