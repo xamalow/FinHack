@@ -1,6 +1,6 @@
 """Build the simulated publisher website from truth.json.
 
-Usage: python site-demo/build.py [--base-url http://localhost:8001]
+Usage: python site-demo/build.py [--base-url https://velstrand-research.vercel.app]
 
 Writes everything into site-demo/public: HTML pages, report PDFs,
 sitemap.xml and robots.txt. Every figure comes from truth.json.
@@ -18,7 +18,7 @@ import pymupdf
 ROOT = Path(__file__).parent
 PUBLIC = ROOT / "public"
 STATIC = ROOT / "static"
-DEFAULT_BASE_URL = "http://localhost:8001"
+DEFAULT_BASE_URL = "https://velstrand-research.vercel.app"
 
 e = html.escape
 

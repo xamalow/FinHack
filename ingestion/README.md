@@ -39,4 +39,5 @@ python -m pytest ingestion/tests -q
 
 Velstrand Research, a fictional firm (company names and figures are invented). 4 free articles, 4 PDF reports of 4 sections each, an "Internal notes" page listed in the sitemap by mistake (the scan flags it), and a draft page blocked by `robots.txt` (the scan skips it). All figures come from `site-demo/truth.json` and are precise (31.4, 17,340) so any leak is obvious.
 
-Vercel: deploy `site-demo` as a static project and replace `GATEWAY_PUBLIC_URL` in `site-demo/vercel.json`. Rebuild with `--base-url https://<vercel-url>` so the sitemap points to the right host.
+Live at https://velstrand-research.vercel.app (Vercel project `velstrand-research`).
+Redeploy with `python site-demo/deploy.py` (needs `VERCEL_TOKEN` in `.env`). Once the gateway has a public URL, run `python site-demo/deploy.py --gateway https://<gateway-url>` so `/.well-known/ai-data.json` on the site serves the manifest and the "selling to AI agents" banner appears. Until then that path answers 502 and the site shows no banner.

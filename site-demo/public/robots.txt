@@ -1,4 +1,4 @@
 User-agent: *
 Disallow: /drafts/
 
-Sitemap: http://localhost:8001/sitemap.xml
+Sitemap: https://velstrand-research.vercel.app/sitemap.xml
