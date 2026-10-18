@@ -47,6 +47,11 @@ async def main():
         if state["receipts"]:
             print("     tx", state["receipts"][0]["explorer"])
 
+        replay = (await http.post(f"{BASE}/buyer/replay-last", json={"run_id": run["run_id"]})).json()
+        check("replay demo: same signed payment -> 409, nothing delivered",
+              replay.get("status_code") == 409 and replay.get("delivered") is False, replay.get("status_code"))
+        check("replay demo: replay_rejected in events", "replay_rejected" in [e["type"] for e in await get_events(http)])
+
         run = (await http.post(f"{BASE}/buyer/run", json={
             "mission": "I need the full battery market section with methodology.", "budget_usdc": 5.0, "wallet": 2})).json()
         state = await wait_for(http, run["run_id"], {"waiting_approval", "done", "refused", "failed"})

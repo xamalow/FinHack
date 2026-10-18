@@ -186,6 +186,18 @@ class BuyerAgent:
     data: list = field(default_factory=list)
     session_id: str | None = None
     pending_offer: dict | None = None
+    last_paid_request: dict | None = None
+
+    async def replay_last_payment(self):
+        """Security demo: resend the exact request of the last successful payment (same signature, same
+        nonce, same offer). The gateway must answer 409 replay_rejected and deliver nothing."""
+        if self.last_paid_request is None:
+            return None
+        async with httpx.AsyncClient(timeout=60) as http:
+            r = await http.post(self.last_paid_request["url"], headers=self.last_paid_request["headers"],
+                                json=self.last_paid_request["json"])
+        return {"status_code": r.status_code, "body": r.json() if r.headers.get("content-type", "").startswith(
+            "application/json") else r.text[:200], "delivered": r.status_code == 200}
 
     def __post_init__(self):
         self.account = Account.from_key(self.private_key)
@@ -316,8 +328,9 @@ class BuyerAgent:
                    "validBefore": auth_data.get("validBefore"), "nonce": auth_data.get("nonce"),
                    "signature": "0x…masked"})
 
-        r = await http.post(url, headers={**auth, "PAYMENT-SIGNATURE": encode_payment_signature_header(payload)},
-                            json={"offer_id": offer["offer_id"]})
+        paid_request = {"url": url, "headers": {**auth, "PAYMENT-SIGNATURE": encode_payment_signature_header(payload)},
+                        "json": {"offer_id": offer["offer_id"]}}
+        r = await http.post(paid_request["url"], headers=paid_request["headers"], json=paid_request["json"])
         if r.status_code != 200:
             return self.finish("failed", f"Payment not accepted ({r.status_code}): {r.text[:200]}")
 
@@ -327,6 +340,7 @@ class BuyerAgent:
         receipt = {"offer_id": offer["offer_id"], "tx_hash": settle.transaction, "amount_usdc": price,
                    "explorer": f"{EXPLORER_URL}/tx/{settle.transaction}"}
         self.receipts.append(receipt)
+        self.last_paid_request = paid_request  # kept in memory only, for the replay demo
         self.data.append({"offer_id": offer["offer_id"], "license": body.get("license"), "content": body.get("content")})
         self.emit("data_received", f"Data received, tx {settle.transaction[:10]}...", receipt)
         return self.finish("done", f"Bought {offer['tier']} for {price} USDC")

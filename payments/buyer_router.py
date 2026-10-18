@@ -60,6 +60,17 @@ async def buyer_status(run_id: str):
     return {"run_id": run_id, **agent.result()}
 
 
+@router.post("/buyer/replay-last")
+async def buyer_replay_last(run_id: str | None = Body(None, embed=True)):
+    """Security demo button: replays the last paid request of a run (default: the latest run that paid).
+    The gateway answers 409 and logs replay_rejected in the live view."""
+    candidates = [RUNS[run_id]] if run_id in RUNS else [a for a in reversed(RUNS.values()) if a.last_paid_request]
+    if not candidates or candidates[0].last_paid_request is None:
+        return JSONResponse({"error": "no_paid_request_to_replay"}, status_code=404)
+    result = await candidates[0].replay_last_payment()
+    return {"replayed_offer_id": candidates[0].last_paid_request["json"]["offer_id"], **result}
+
+
 @router.post("/buyer/approve")
 async def buyer_approve(offer_id: str = Body(...), approved: bool = Body(True)):
     if not approvals.resolve(offer_id, approved):
