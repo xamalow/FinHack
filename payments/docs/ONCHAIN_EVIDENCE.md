@@ -8,6 +8,17 @@ The list is read directly from the chain (USDC `Transfer` logs to the publisher 
 - Publisher wallet (payTo): [`0x797486c95c00d40F30E41996b0DA5417fF256844`](https://sepolia.basescan.org/address/0x797486c95c00d40F30E41996b0DA5417fF256844)
 - Total: **25 payments, 15.71 USDC**, all on 2026-10-17/18 (UTC)
 
+## Base mainnet (real USDC)
+
+The same payment code runs on Base mainnet (`eip155:8453`) with native USDC
+[`0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913`](https://basescan.org/token/0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913)
+and the PayAI facilitator (`https://facilitator.payai.network`, gas paid by the facilitator). Only configuration changes
+(`scripts/mainnet.sh` exports `.env.mainnet`); dedicated mainnet wallets, funded with 5 USD of real USDC by card.
+
+| Time (UTC) | Scenario | Amount | Payer | Payee | Tx |
+|---|---|---|---|---|---|
+| 10-18 20:41 | x402 paid route (`payments/spike_server.py`) | 0.01 USDC | `0xc551aB5B4f72faaC4927B2E2cf2b64dC70fc7372` | `0xAd5ed0c67d17E57b87ce8Beb1a06FDe9f5e77c82` | [0x695cf3bb3a…](https://basescan.org/tx/0x695cf3bb3a354d623890ba7f87d3809ca5a607e326f33905dca0b44723e0e250) |
+
 ## Key transactions
 
 | Scenario | Amount | Tx |
