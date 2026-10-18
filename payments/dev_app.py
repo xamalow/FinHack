@@ -22,6 +22,12 @@ async def dev_offer(tier: str, content_id: str = "rpt_battery_2025#s2"):
     return mock_p2.create_offer("ses_dev", tier, [content_id])
 
 
+@app.post("/dev/exclude")
+async def dev_exclude(content_id: str):
+    mock_p2.EXCLUDED.add(content_id)
+    return {"excluded": sorted(mock_p2.EXCLUDED)}
+
+
 @app.get("/dev/events")
 async def dev_events():
     return mock_p2.EVENTS

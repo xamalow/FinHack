@@ -20,7 +20,9 @@ TIERS = {
 CONTENT = {
     "rpt_battery_2025#s2": "Market share 2025: Voltacell 31.4%, Nordbatt 18.7%, Ionix 12.2%",
     "rpt_battery_2025#s3": "Full section with methodology (mock text).",
+    "rpt_battery_2025#s4": "Gigafactory capacity 2025: 412 GWh (mock text).",
 }
+EXCLUDED = set()
 
 DEV_TOKEN = "dev-token"
 SESSIONS = {
@@ -70,16 +72,20 @@ def get_publisher_wallet():
 
 
 def get_content(content_ids):
-    return {cid: CONTENT.get(cid, "") for cid in content_ids}
+    """Like P1's ingestion.store.get_content: raises if any id is unknown or excluded."""
+    missing = [cid for cid in content_ids if cid not in CONTENT or cid in EXCLUDED]
+    if missing:
+        raise KeyError(f"content not available: {missing}")
+    return {cid: CONTENT[cid] for cid in content_ids}
 
 
-def create_offer(session_id, tier, content_ids, price_usdc=None, status="accepted"):
+def create_offer(session_id, tier, content_ids, price_usdc=None, status="accepted", scope="mock offer"):
     offer_id = "off_" + uuid.uuid4().hex[:8]
     OFFERS[offer_id] = {
         "offer_id": offer_id,
         "session_id": session_id,
         "content_ids": content_ids,
-        "scope": "mock offer",
+        "scope": scope,
         "tier": tier,
         "price_usdc": TIERS[tier] if price_usdc is None else price_usdc,
         "license": "internal_use_only",

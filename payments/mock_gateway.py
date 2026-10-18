@@ -69,11 +69,14 @@ async def session_message(message: str = Body(..., embed=True), authorization: s
         return {"action": "no_match", "message_to_buyer": "We do not cover this topic.", "offer": None}
     if "full" in text or "methodology" in text or "section" in text:
         tier, cid = "full_section", "rpt_battery_2025#s3"
+        scope = "Full section 'European battery market 2025', methodology included"
     elif "table" in text or "top 5" in text:
         tier, cid = "small_table", "rpt_battery_2025#s2"
+        scope = "2025 market share of the top 5 European battery manufacturers"
     else:
         tier, cid = "single_fact", "rpt_battery_2025#s2"
-    offer = mock_p2.create_offer(session["session_id"], tier, [cid], status="proposed")
+        scope = "2025 market share of the top European battery manufacturer, one figure"
+    offer = mock_p2.create_offer(session["session_id"], tier, [cid], status="proposed", scope=scope)
     return {
         "action": "propose_offer",
         "message_to_buyer": f"We can sell this as a {tier.replace('_', ' ')}.",

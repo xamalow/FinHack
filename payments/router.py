@@ -32,6 +32,23 @@ def error(status, session_id, event_type, summary, payload=None, headers=None):
     return JSONResponse({"error": event_type, "detail": summary}, status_code=status, headers=headers)
 
 
+def load_content(offer):
+    """The content must be deliverable before we ask for or take the money. None if it is not
+    (P1 raises for unknown or excluded ids). Kept in memory, never sent before settlement."""
+    try:
+        content = deps.get_content(offer["content_ids"])
+    except Exception:
+        return None
+    if not content or any(not content.get(cid) for cid in offer["content_ids"]):
+        return None
+    return content
+
+
+def content_unavailable(sid, offer):
+    return error(409, sid, "payment_rejected", f"Content of {offer['offer_id']} is not available, nothing to pay",
+                 {"offer_id": offer["offer_id"], "content_ids": offer["content_ids"]})
+
+
 def auth(authorization):
     token = (authorization or "").removeprefix("Bearer ").strip()
     return deps.get_session(token) if token else None
@@ -87,6 +104,9 @@ async def paid_query(route, request, offer_id, authorization, payment_signature)
     if tier_price is None or abs(tier_price - float(offer["price_usdc"])) > 1e-9:
         return error(400, sid, "payment_rejected", "Offer price does not match the confirmed tier")
 
+    if load_content(offer) is None:
+        return content_unavailable(sid, offer)
+
     amount = config.usdc_to_atomic(tier_price)
     pay_to = deps.get_publisher_wallet()
     requirements = build_requirements(amount, pay_to)
@@ -116,6 +136,11 @@ async def paid_query(route, request, offer_id, authorization, payment_signature)
         deps.log_event(sid, "gateway", "payment_rejected", "Payer is not the KYA-verified wallet",
                        {"payer": payer, "kya_wallet": session["wallet_address"]})
         return await payment_required(request, offer, requirements, sid, "Payer is not the verified agent wallet")
+
+    # Checked again right before taking the money: the publisher may have excluded it since the 402.
+    content = load_content(offer)
+    if content is None:
+        return content_unavailable(sid, offer)
 
     try:
         tx_id = store.reserve(offer_id, nonce, payer, pay_to, amount)
@@ -164,7 +189,6 @@ async def paid_query(route, request, offer_id, authorization, payment_signature)
     deps.log_event(sid, "chain", "tx_confirmed", f"Tx {settle.transaction[:10]}... confirmed",
                    {"tx_hash": settle.transaction, "explorer": tx_url})
 
-    content = deps.get_content(offer["content_ids"])
     deps.log_event(sid, "gateway", "content_delivered", f"Delivered {len(content)} item(s) for {offer_id}",
                    {"offer_id": offer_id, "content_ids": offer["content_ids"]})
     return JSONResponse(
@@ -195,7 +219,9 @@ async def receipt(tx_hash: str, authorization: str | None = Header(None)):
         return error(410, sid, "payment_rejected", "Receipt expired")
 
     offer = deps.get_offer(tx["offer_id"])
-    content = deps.get_content(offer["content_ids"])
+    content = load_content(offer) if offer else None
+    if content is None:
+        return error(410, sid, "payment_rejected", "Paid content is no longer available", {"tx_hash": tx_hash})
     deps.log_event(sid, "gateway", "receipt_redownload", f"Re-delivered {tx['offer_id']} from receipt",
                    {"tx_hash": tx_hash})
     return {"offer_id": tx["offer_id"], "license": offer["license"], "content": content,

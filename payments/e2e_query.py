@@ -87,6 +87,22 @@ async def main():
         r = await http.get(f"{BASE}/receipt/{tx_hash}")
         check("receipt without session -> 401", r.status_code == 401, r.status_code)
 
+        ghost = (await http.post(f"{BASE}/dev/offer", params={"tier": "single_fact", "content_id": "rpt_ghost#s9"})).json()
+        r = await http.post(f"{BASE}/query/t010", json={"offer_id": ghost["offer_id"]}, headers=AUTH)
+        check("unknown content -> 409 before any 402", r.status_code == 409 and "payment-required" not in r.headers,
+              r.status_code)
+
+        late = (await http.post(f"{BASE}/dev/offer", params={"tier": "single_fact",
+                                                             "content_id": "rpt_battery_2025#s4"})).json()
+        r, _, late_sig = await sign_for(http, x402, "t010", late["offer_id"])
+        check("content available -> 402", r.status_code == 402, r.status_code)
+        await http.post(f"{BASE}/dev/exclude", params={"content_id": "rpt_battery_2025#s4"})
+        r = await http.post(f"{BASE}/query/t010", json={"offer_id": late["offer_id"]},
+                            headers={**AUTH, "PAYMENT-SIGNATURE": late_sig})
+        txs = (await http.get(f"{BASE}/transactions")).json()
+        check("content excluded after 402 -> 409, payment not taken",
+              r.status_code == 409 and not any(t["offer_id"] == late["offer_id"] for t in txs), r.status_code)
+
     print(f"\n{sum(results)}/{len(results)} passed")
     sys.exit(0 if all(results) else 1)
 
