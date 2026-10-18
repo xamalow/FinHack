@@ -137,7 +137,7 @@ export function scenarioFor(mission: string): DemoScenario {
   return "single_fact";
 }
 
-export async function runBuyer(mission: string, budgetUsdc: number): Promise<{ session_id: string }> {
+export async function runBuyer(mission: string, budgetUsdc: number): Promise<{ run_id: string; agent: string }> {
   if (!USE_MOCKS) return http("POST", "/buyer/run", { mission, budget_usdc: budgetUsdc });
 
   const sessionId = `ses_${(++mock.sessions).toString(16).padStart(3, "0")}${Math.random().toString(16).slice(2, 5)}`;
@@ -147,7 +147,7 @@ export async function runBuyer(mission: string, budgetUsdc: number): Promise<{ s
 
   if (scenario === "security") {
     void playScript(securityScript(mock.publisherWallet), sessionId);
-    return { session_id: sessionId };
+    return { run_id: sessionId, agent: BUYER_WALLET };
   }
   const offerId = `off_${Math.random().toString(16).slice(2, 6)}`;
   const { beforeApproval, afterApproval } = purchaseScript({
@@ -161,7 +161,7 @@ export async function runBuyer(mission: string, budgetUsdc: number): Promise<{ s
   });
   if (afterApproval.length) mock.pending.set(offerId, afterApproval);
   void playScript(beforeApproval, sessionId);
-  return { session_id: sessionId };
+  return { run_id: sessionId, agent: BUYER_WALLET };
 }
 
 export async function approve(offerId: string, sessionId: string | null): Promise<void> {

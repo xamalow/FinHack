@@ -132,8 +132,8 @@ export const mockAudit = (offerId: string): Audit => {
     },
     agent: { agent_id: "agt_7a3", wallet_address: tx.payer, status: "verified" },
     messages: [
-      { role: "buyer", content: "I need the 2025 European market share of the leading battery maker.", ts: tx.ts },
-      { role: "sales_agent", content: "We cover European battery manufacturers for 2025. I can offer one figure for 0.10 USDC.", ts: tx.ts },
+      { role: "buyer", content: big ? "I need the full 2025 ranking with your methodology." : "I need the 2025 European market share of the leading battery maker.", ts: String(tx.ts) },
+      { role: "sales_agent", content: big ? "Our 2025 report has a full ranking section with methodology, offered at 2.00 USDC." : "We cover European battery manufacturers for 2025. I can offer one figure for 0.10 USDC.", ts: String(tx.ts) },
     ],
     transaction: tx,
     events: [],

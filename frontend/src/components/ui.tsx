@@ -55,4 +55,6 @@ export function AddressLink({ address }: { address: string }) {
 }
 
 export const usdc = (n: number) => `${n.toFixed(2)} USDC`;
+// Transactions carry epoch seconds, events carry ISO strings.
+export const toDate = (ts: number | string) => new Date(typeof ts === "number" ? ts * 1000 : ts);
 export const atomicToUsdc = (a: string | number) => Number(a) / 1e6;

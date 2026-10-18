@@ -34,7 +34,7 @@ export type Actor =
   | "publisher";
 
 export interface AppEvent {
-  event_id?: string;
+  event_id?: number | string;
   ts: string;
   session_id: string | null;
   actor: Actor;
@@ -62,11 +62,11 @@ export interface Transaction {
   offer_id: string;
   payer: string;
   pay_to: string;
-  amount_atomic: string;
+  amount_atomic: number | string;
   nonce: string;
-  tx_hash: string;
+  tx_hash: string | null;
   status: string;
-  ts: string;
+  ts: number | string; // epoch seconds from the transactions table, ISO in mocks
 }
 
 export interface PublisherStats {
@@ -88,7 +88,7 @@ export interface Manifest {
 
 export interface Audit {
   offer: Offer;
-  agent: { agent_id: string; wallet_address: string; status: string };
+  agent: { agent_id: string; wallet_address: string; status: string } | null;
   messages: { role: "buyer" | "sales_agent"; content: string; ts: string }[];
   transaction: Transaction | null;
   events: AppEvent[];

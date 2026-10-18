@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { AddressLink, Card, TxLink, atomicToUsdc, usdc } from "@/components/ui";
+import { AddressLink, Card, TxLink, atomicToUsdc, toDate, usdc } from "@/components/ui";
 import * as api from "@/lib/api";
 import type { Audit, PublisherStats, Transaction } from "@/lib/types";
 
@@ -67,14 +67,14 @@ export default function Dashboard() {
                       onClick={() => openAudit(t.offer_id)}
                       className={`cursor-pointer border-t border-border hover:bg-surface-2 ${audit?.offer.offer_id === t.offer_id ? "bg-surface-2" : ""}`}
                     >
-                      <td className="py-2.5 pr-4 font-mono text-xs text-muted">{new Date(t.ts).toLocaleTimeString()}</td>
+                      <td className="py-2.5 pr-4 font-mono text-xs text-muted">{toDate(t.ts).toLocaleTimeString()}</td>
                       <td className="pr-4 font-mono text-xs">{t.offer_id}</td>
                       <td className="pr-4" onClick={(e) => e.stopPropagation()}>
                         <AddressLink address={t.payer} />
                       </td>
                       <td className="pr-4 text-right font-mono">{atomicToUsdc(t.amount_atomic).toFixed(2)}</td>
                       <td onClick={(e) => e.stopPropagation()}>
-                        <TxLink hash={t.tx_hash} />
+                        {t.tx_hash ? <TxLink hash={t.tx_hash} /> : <span className="text-muted">{t.status}</span>}
                       </td>
                     </tr>
                   ))}
@@ -106,11 +106,13 @@ function AuditView({ audit }: { audit: Audit }) {
   const { offer, agent, messages, transaction } = audit;
   return (
     <div className="animate-fade-in space-y-4 text-sm">
-      <Section title="Agent identity (KYA)">
-        <Row k="Agent" v={<span className="font-mono">{agent.agent_id}</span>} />
-        <Row k="Wallet" v={<AddressLink address={agent.wallet_address} />} />
-        <Row k="Status" v={<span className="text-ok">{agent.status}</span>} />
-      </Section>
+      {agent && (
+        <Section title="Agent identity (KYA)">
+          <Row k="Agent" v={<span className="font-mono">{agent.agent_id}</span>} />
+          <Row k="Wallet" v={<AddressLink address={agent.wallet_address} />} />
+          <Row k="Status" v={<span className="text-ok">{agent.status}</span>} />
+        </Section>
+      )}
       <Section title="Offer">
         <Row k="Offer" v={<span className="font-mono">{offer.offer_id}</span>} />
         <Row k="Scope" v={offer.scope} />
@@ -134,7 +136,7 @@ function AuditView({ audit }: { audit: Audit }) {
           <Row k="Amount" v={usdc(atomicToUsdc(transaction.amount_atomic))} />
           <Row k="Pay to" v={<AddressLink address={transaction.pay_to} />} />
           <Row k="Status" v={<span className="text-ok">{transaction.status}</span>} />
-          <Row k="Tx hash" v={<TxLink hash={transaction.tx_hash} />} />
+          {transaction.tx_hash && <Row k="Tx hash" v={<TxLink hash={transaction.tx_hash} />} />}
         </Section>
       )}
     </div>
