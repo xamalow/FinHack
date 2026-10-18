@@ -1,11 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Button, Card, TxLink, AddressLink, shortHex } from "@/components/ui";
+import { Button, Card, TxLink, AddressLink, atomicToUsdc, shortHex, toDate } from "@/components/ui";
 import * as api from "@/lib/api";
 import { BUYER_WALLET, CHAIN_NAME, USE_MOCKS } from "@/lib/config";
 import { PHASES, labelFor, type Tone } from "@/lib/eventLabels";
-import type { AppEvent } from "@/lib/types";
+import type { AppEvent, Transaction } from "@/lib/types";
 import { useEventStream } from "@/lib/useEventStream";
 
 const PLATFORM = ["gateway", "sales_agent", "facilitator"];
@@ -144,23 +144,53 @@ const STATUS_STYLE: Record<Status["tone"], string> = {
 
 // ---------------------------------------------------------------- payments seen on the chain
 
-type Payment = { key: string; ts: string; amount: number; hash: string | null; payer: string | null; state: "settling" | "confirmed" | "refused" };
+type Payment = {
+  key: string;
+  ts: string;
+  amount: number;
+  hash: string | null;
+  payer: string | null;
+  state: "settling" | "confirmed" | "refused";
+  count?: number;
+};
 
-function paymentsOf(visible: AppEvent[], now: number): Payment[] {
-  const out: Payment[] = [];
-  let lastPayer: string | null = null;
+// Confirmed payments come from the recorded sales (GET /transactions), so the history survives Clear and reloads.
+// Live events add what the table cannot show: a payment being settled, and a replay that was refused.
+function paymentsOf(txs: Transaction[], visible: AppEvent[], now: number): Payment[] {
+  const out: Payment[] = txs
+    .filter((x) => x.status === "settled")
+    .map((x) => ({
+      key: x.tx_id,
+      ts: toDate(x.ts).toISOString(),
+      amount: atomicToUsdc(x.amount_atomic),
+      hash: x.tx_hash,
+      payer: x.payer,
+      state: "confirmed" as const,
+    }));
+  const lastSettled = out.reduce((m, p) => (p.ts > m ? p.ts : m), "");
   for (const e of visible) {
-    if (e.type === "payment_verified") {
-      lastPayer = typeof e.payload.payer === "string" ? e.payload.payer : lastPayer;
-      const settledLater = visible.some((x) => x.type === "payment_settled" && x.session_id === e.session_id && x.ts >= e.ts);
-      if (!settledLater && now - Date.parse(e.ts) < 120_000)
-        out.push({ key: `v${e.event_id ?? e.ts}`, ts: e.ts, amount: usdcIn(e.summary), hash: null, payer: lastPayer, state: "settling" });
+    if (e.type === "payment_verified" && e.ts > lastSettled && now - Date.parse(e.ts) < 120_000) {
+      const settled = visible.some((x) => x.type === "payment_settled" && x.session_id === e.session_id && x.ts >= e.ts);
+      if (!settled)
+        out.push({
+          key: `v${e.event_id ?? e.ts}`,
+          ts: e.ts,
+          amount: usdcIn(e.summary),
+          hash: null,
+          payer: typeof e.payload.payer === "string" ? e.payload.payer : null,
+          state: "settling",
+        });
     }
-    if (e.type === "payment_settled")
-      out.push({ key: `s${e.event_id ?? e.ts}`, ts: e.ts, amount: usdcIn(e.summary), hash: findHash(e.payload), payer: lastPayer, state: "confirmed" });
     if (e.type === "replay_rejected") out.push({ key: `r${e.event_id ?? e.ts}`, ts: e.ts, amount: 0, hash: null, payer: null, state: "refused" });
   }
-  return out.sort((a, b) => (a.ts < b.ts ? 1 : -1));
+  // Several replays in a row are one story: keep a single card with a count.
+  const merged: Payment[] = [];
+  for (const p of out.sort((a, b) => (a.ts < b.ts ? 1 : -1))) {
+    const prev = merged.at(-1);
+    if (p.state === "refused" && prev?.state === "refused") prev.count = (prev.count ?? 1) + 1;
+    else merged.push({ ...p });
+  }
+  return merged;
 }
 
 // ---------------------------------------------------------------- page
@@ -186,6 +216,7 @@ export default function LiveView() {
   const [balances, setBalances] = useState<{ buyer: number | null; publisher: number | null }>({ buyer: null, publisher: null });
   const [buyerWallet, setBuyerWallet] = useState(BUYER_WALLET);
   const [now, setNow] = useState(() => Date.now());
+  const [txs, setTxs] = useState<Transaction[]>([]);
 
   const refreshBalances = useCallback(async () => {
     try {
@@ -198,13 +229,23 @@ export default function LiveView() {
       // gateway not reachable yet, keep last values
     }
   }, [publisherWallet, buyerWallet]);
+  const refreshTxs = useCallback(() => {
+    api.getTransactions().then(setTxs, () => {});
+  }, []);
   const refreshRef = useRef(refreshBalances);
   useEffect(() => {
     refreshRef.current = refreshBalances;
   }, [refreshBalances]);
+  const refreshTxsRef = useRef(refreshTxs);
+  useEffect(() => {
+    refreshTxs();
+    const t = setInterval(refreshTxs, 3000);
+    return () => clearInterval(t);
+  }, [refreshTxs]);
 
   const { events, connected } = useEventStream((e) => {
     if (e.type === "balance_changed") void refreshRef.current();
+    if (e.type === "payment_settled") setTimeout(refreshTxsRef.current, 300);
     // Any buyer (P3's agent or someone's own assistant) announces its wallet when it starts.
     if (e.type === "mission_started" && typeof e.payload.wallet === "string") setBuyerWallet(e.payload.wallet);
   }, 0);
@@ -237,7 +278,22 @@ export default function LiveView() {
   );
   const latest = visible.at(-1) ?? null;
   const visits = useMemo(() => groupVisits(visible), [visible]);
-  const payments = useMemo(() => paymentsOf(visible, now), [visible, now]);
+  const payments = useMemo(() => paymentsOf(txs, visible, now), [txs, visible, now]);
+  const totalPaid = payments.filter((p) => p.state === "confirmed").reduce((s, p) => s + p.amount, 0);
+  // Only payments that arrive while the page is open play the coin animation, not the history on load.
+  const seen = useRef<Set<string> | null>(null);
+  const [fresh, setFresh] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    const keys = payments.map((p) => p.key);
+    if (seen.current === null) {
+      if (txs.length || keys.length) seen.current = new Set(keys);
+      return;
+    }
+    const added = keys.filter((k) => !seen.current!.has(k));
+    if (!added.length) return;
+    added.forEach((k) => seen.current!.add(k));
+    setFresh((f) => new Set([...f, ...added]));
+  }, [payments, txs.length]);
 
   // Balances can update after the buyer reports back: the run is finished once its mission_done is in.
   const finished = useMemo(() => {
@@ -339,7 +395,7 @@ export default function LiveView() {
       )}
 
       <div className="grid gap-4 md:grid-cols-[3fr_2fr]">
-        <Card title="Publisher platform" subtitle="Each agent that came to buy, with everything that happened" className="min-h-[62vh]">
+        <Card title="Agents buying from you" subtitle="Each AI agent that came to buy your data, and everything it did" className="min-h-[62vh]">
           {visits.length ? (
             <div className="space-y-2">
               {visits.map((v, i) => (
@@ -362,9 +418,15 @@ export default function LiveView() {
             <BalanceTile label="Buyer" address={buyerWallet} value={balances.buyer} />
             <BalanceTile label="Publisher" address={publisherWallet} value={balances.publisher} />
           </div>
-          <div className="mt-4 space-y-2">
+          <div className="mb-2 mt-5 flex items-baseline justify-between text-xs">
+            <span className="font-medium uppercase tracking-wide text-muted">Payment history</span>
+            <span className="tabular-nums text-muted">
+              {payments.filter((p) => p.state === "confirmed").length} received · {totalPaid.toFixed(2)} USDC
+            </span>
+          </div>
+          <div className="space-y-2">
             {payments.length ? (
-              payments.map((p) => <PaymentCard key={p.key} payment={p} publisher={publisherWallet} />)
+              payments.map((p) => <PaymentCard key={p.key} payment={p} publisher={publisherWallet} fresh={fresh.has(p.key)} />)
             ) : (
               <Empty text="No payment yet." />
             )}
@@ -514,20 +576,22 @@ function BalanceTile({ label, address, value }: { label: string; address: string
   );
 }
 
-function PaymentCard({ payment: p, publisher }: { payment: Payment; publisher: string | null }) {
+function PaymentCard({ payment: p, publisher, fresh }: { payment: Payment; publisher: string | null; fresh: boolean }) {
   if (p.state === "refused")
     return (
       <div className="animate-fade-in flex items-center gap-3 rounded-xl border border-dashed border-bad/40 px-3.5 py-2.5 text-sm">
         <span className="grid size-6 place-items-center rounded-full bg-bad/10 text-xs text-bad">✕</span>
         <div className="min-w-0 flex-1">
-          <div className="font-medium text-bad">Replayed payment refused</div>
+          <div className="font-medium text-bad">
+            Replayed payment refused{p.count && p.count > 1 ? <span className="ml-1.5 text-xs font-normal">×{p.count}</span> : null}
+          </div>
           <div className="text-xs text-muted">Nothing moved on-chain · {clock(p.ts)}</div>
         </div>
       </div>
     );
   const settling = p.state === "settling";
   return (
-    <div className="animate-fade-in rounded-xl border border-border bg-background px-3.5 py-3">
+    <div className={`rounded-xl border px-3.5 py-3 transition-colors duration-1000 ${fresh ? "animate-fade-in border-ok/40 bg-ok/5" : "border-border bg-background"}`}>
       <div className="flex items-baseline justify-between gap-2">
         <span className="font-mono text-lg font-semibold tabular-nums">
           {p.amount.toFixed(2)} <span className="text-xs font-normal text-muted">USDC</span>
@@ -537,7 +601,7 @@ function PaymentCard({ payment: p, publisher }: { payment: Payment; publisher: s
             <span className="size-1.5 animate-pulse rounded-full bg-accent" /> Settling
           </span>
         ) : (
-          <span className="animate-pop flex items-center gap-1 text-xs font-medium text-ok">✓ Confirmed</span>
+          <span className={`flex items-center gap-1 text-xs font-medium text-ok ${fresh ? "animate-pop" : ""}`}>✓ Confirmed</span>
         )}
       </div>
       <div className="my-2.5 flex items-center gap-2 text-[10px] text-muted">
@@ -547,7 +611,11 @@ function PaymentCard({ payment: p, publisher }: { payment: Payment; publisher: s
           <span
             className={`absolute inset-x-0 top-1/2 h-px origin-left -translate-y-1/2 bg-ok/60 transition-transform duration-700 ${settling ? "scale-x-0" : "scale-x-100"}`}
           />
-          <span className={`absolute top-0 size-2.5 rounded-full bg-ok shadow-[0_0_0_3px_rgba(5,150,105,0.15)] ${settling ? "animate-travel-loop" : "animate-travel"}`} />
+          {settling || fresh ? (
+            <span className={`absolute top-0 size-2.5 rounded-full bg-ok shadow-[0_0_0_3px_rgba(5,150,105,0.15)] ${settling ? "animate-travel-loop" : "animate-travel"}`} />
+          ) : (
+            <span className="absolute right-0 top-0.5 size-1.5 rounded-full bg-ok/70" />
+          )}
         </div>
         <span className="font-mono">{publisher ? shortHex(publisher, 4, 3) : "publisher"}</span>
       </div>
