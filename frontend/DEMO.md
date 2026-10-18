@@ -23,21 +23,30 @@ Follows agent.md section 2. No terminal on screen at any time.
 
 ## 0:45 to 2:00, an agent buys
 
-1. `/live`, preset **Sale 0.10**, budget 5, **Run agent**.
+1. `/live`, scenario **Small purchase, 0.10 USDC**, budget 5, **Run agent**.
 2. Narrate the columns: KYA verified, Sales agent offer with no figure, 402, signature, facilitator verify and settle, tx hash.
 3. Point at both balances moving. Click the hash, the Base Sepolia explorer opens.
-4. Click a line (for example `payment_required_sent`) to show the raw 402 payload.
+4. Click a line (for example "Invoice sent") to show the raw 402 payload.
+
+### Variant: a real person with their own Claude
+
+Instead of the Run agent button, buy from Claude Desktop with the `finhack-buyer` connector (setup in [buyer-mcp/README.md](../buyer-mcp/README.md)). Put Claude Desktop and the live view side by side.
+
+1. Type: "Use finhack-buyer to find the 2025 European market share of the leading battery manufacturer. One figure is enough. Tell me the price before buying."
+2. Claude searches, proves its identity, gets an offer at 0.10 USDC and tells you the price. Say "go ahead".
+3. The live view fills in real time, each buyer line tagged "Via the user's own AI assistant".
+4. For the 2.00 sale, ask for "the full methodology section". The approval banner says it waits for the owner in their assistant: answer "yes" in Claude.
 
 ## 2:00 to 2:30, a more expensive sale
 
-1. Preset **Sale 2.00**, **Run agent**.
-2. The yellow banner "Human approval required" appears. Say: "above the 1.00 threshold the agent asks its owner".
+1. Scenario **Big purchase, 2.00 USDC**, **Run agent**.
+2. The orange banner "The agent needs your approval" appears. Say: "above the 1.00 threshold the agent asks its owner".
 3. **Approve 2.00 USDC**, the payment goes through. "The price follows the request."
 
 ## 2:30 to 2:50, security
 
-1. Preset **Security**, **Run agent**.
-2. Three red lines: `injection_ignored`, `replay_rejected` (409), `offer_refused_budget`.
+1. Scenario **Attack attempts**, **Run agent**.
+2. Red lines: "Manipulation attempt blocked", and with the mocks "Reused payment blocked" (409) and "Agent refuses: too expensive".
 
 ## 2:50 to 3:00, the publisher gets paid
 

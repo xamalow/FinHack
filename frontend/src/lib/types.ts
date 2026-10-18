@@ -15,7 +15,7 @@ export interface CatalogItem {
   data_types: string[];
   sensitivity: string;
   status: CatalogStatus;
-  suggested_tier: TierName;
+  suggested_tier: TierName | null; // null for free and excluded items
 }
 
 export interface Tier {
