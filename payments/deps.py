@@ -2,9 +2,13 @@
 
 P2 implements this interface in gateway/integration.py (sessions, offers, tiers,
 publisher wallet, log_event, and P1's get_content). Mocks from payments/mock_p2.py
-are used only when the gateway package is absent (P3 alone, dev_app.py).
+are used when the gateway package is absent, or with P3_USE_MOCKS=1 (dev_app.py).
 """
+import os
+
 try:
+    if os.getenv("P3_USE_MOCKS") == "1":  # payments/dev_app.py: P3 alone, even when the gateway package exists
+        raise ModuleNotFoundError(name="gateway")
     from gateway.integration import (  # noqa: F401
         get_content,
         get_offer,

@@ -70,10 +70,10 @@ def mark_settled(tx_id, tx_hash):
         )
 
 
-def offer_consumed(offer_id):
+def get_by_offer(offer_id):
     with _conn() as conn:
-        row = conn.execute("SELECT 1 FROM transactions WHERE offer_id = ?", (offer_id,)).fetchone()
-    return row is not None
+        row = conn.execute("SELECT * FROM transactions WHERE offer_id = ?", (offer_id,)).fetchone()
+    return dict(row) if row else None
 
 
 def get_by_hash(tx_hash):

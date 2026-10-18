@@ -11,7 +11,8 @@ payments/router.py        POST /query/{route}, GET /receipt/{tx_hash}, GET /tran
 payments/buyer_router.py  POST /buyer/run, POST /buyer/approve, GET /buyer/runs/{id}, POST /buyer/replay-last
 payments/x402_server.py   x402 resource server (facilitator client, requirement builder)
 payments/store.py         SQLite: transactions (UNIQUE nonce, UNIQUE offer_id), paid_route_requests
-payments/balances.py      USDC balanceOf + per-session watcher emitting balance_changed
+payments/balances.py      USDC balanceOf + wallet watcher emitting balance_changed
+payments/recovery.py      settles stuck pending payments from the chain (authorizationState, AuthorizationUsed)
 payments/deps.py          the only bridge to P1/P2 code (gateway.integration), mocks when absent
 scripts/                  create_wallets.py, check_funds.py
 ```
@@ -115,6 +116,7 @@ Both live in the shared SQLite file (`DB_PATH`), next to P2's tables.
 | `BUYER_MANIFEST_URL` | `http://127.0.0.1:4022/.well-known/ai-data.json` | where the buyer starts |
 | `RECEIPT_TTL_HOURS`, `DB_PATH`, `ANTHROPIC_API_KEY` | 24, `finhack.db`, none | receipts, storage, buyer LLM |
 | `BUYER_OWNER_TOKEN` | unset | unset: `/buyer/*` only from this machine; set: required as `X-Owner-Token` header from anywhere |
+| `QUERY_RATE_LIMIT_PER_MIN` | 30 | paid requests per session per minute before 429 |
 
 Switching to mainnet: change `NETWORK`, `USDC_ADDRESS`, `FACILITATOR_URL` (CDP, with keys) and fund the wallets. The code is unchanged.
 

@@ -54,9 +54,9 @@ On the seller side, content has three levels set by the publisher (P1/P2): `free
 | R1 | Buyer controls (`/buyer/run`, `/approve`, `/runs`, `/replay-last`) can spend our wallets. | High if reachable by others | **Mitigated**: owner token or loopback only (§2.2). Residual: the owner token is a single shared secret with no expiry or rotation, and if a public frontend calls these routes it must not ship the token in its browser bundle (use a server-side call). `/buyer/replay-last` is a demo-only route. |
 | R2 | Buyer private keys are hot keys in `.env` (plaintext). | Theft = loss of the wallet's USDC | Testnet only, small balances, `.env` git-ignored. Production: CDP server wallet or KMS (brief item 9, not done). |
 | R3 | Single public facilitator (x402.org). If it is down, no sale can settle. | Demo failure | Retry on broadcast errors. Backup Coinbase CDP facilitator possible through `FACILITATOR_URL` + CDP keys, not configured yet. |
-| R4 | Crash between on-chain settlement and `mark_settled`: the row stays `pending`, so `/receipt` cannot re-deliver. Also, if the facilitator raises after the transfer actually landed, the reservation is released. | Buyer paid, no content, manual refund | Very short window. Fix: reconcile `pending` rows against chain logs on startup. |
+| R4 | Crash, or facilitator error, between the on-chain transfer and `mark_settled`: the row stays `pending`. | Buyer paid, no content | **Mitigated** (`payments/recovery.py`): a facilitator error during settle keeps the reservation instead of releasing it; the next request on that offer asks the USDC contract (`authorizationState`) whether the authorization was used, finds the tx hash in `AuthorizationUsed` logs, marks the sale settled and delivers to that same payer; an unused authorization is released once expired. Tested on-chain with a simulated crash (`e2e_recovery.py`). Residual: the public RPC indexes logs a few seconds late, so the first retry may answer 409 "still being settled". |
 | R5 | Pending approvals, buyer runs and balance watchers live in memory. | Lost on gateway restart | Transactions themselves are in SQLite. Acceptable for the demo. |
-| R6 | No rate limiting on `/query` (each 402 also starts an RPC balance watch). | Request flooding, RPC quota | KYA + 15 min session required first. Add per-agent rate limit if public. |
+| R6 | Flooding the paid routes (each 402 also starts an RPC balance watch). | Request flooding, RPC quota | **Mitigated**: sliding one-minute limit per session (per IP before KYA), `QUERY_RATE_LIMIT_PER_MIN` (default 30) → 429; refused requests are not logged as events so a flood cannot fill the events table. Residual: in-memory counters, per gateway process. |
 | R7 | Product granularity: today the smallest content unit is a report section, so a 0.10 "one figure" sale delivers a full paragraph with several figures. | Under-priced data | Raised to P1/P2 (atomic fact items from `truth.json`). |
 | R8 | The LLM can still be talked into a bad but within-limits purchase (e.g. wrong report). | Wasted spend ≤ threshold per decision | Bounded by tier 2 limits; anything above threshold needs a human. |
 | R9 | Testnet only. Mainnet needs `NETWORK`, `USDC_ADDRESS`, a CDP facilitator and real funds; code unchanged but untested there. | n/a | Out of scope for the hackathon. |
@@ -64,11 +64,12 @@ On the seller side, content has three levels set by the publisher (P1/P2): `free
 ## 4. How to verify
 
 ```bash
-.venv/bin/python -m pytest buyer-agent payments/tests -q   # 15 guard/approval + 9 owner-access unit tests
+.venv/bin/python -m pytest buyer-agent payments/tests -q   # buyer guards, approvals, wallet balance, owner access, recovery, rate limit
 .venv/bin/uvicorn payments.dev_app:app --port 4022
 .venv/bin/python payments/e2e_query.py               # 15 checks: 402, payment, replay x2, mismatch, content checks, receipt
 .venv/bin/python payments/e2e_buyer.py               # 22 checks: 0.10, 2.00 with approval, budget refusal, denial, replay demo, events
 .venv/bin/python payments/e2e_balances_stats.py      # 10 checks: balances, balance_changed, stats
+.venv/bin/python payments/e2e_recovery.py            # 7 checks: simulated crash recovered from the chain, 429 on flood
 ```
 
 All three e2e suites also pass against P2's gateway (`GATEWAY_URL=http://127.0.0.1:8000`) and on the P1 + P2 + P3 merge with P1's real catalog.

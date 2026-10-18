@@ -9,7 +9,9 @@ Order on a paid request:
 6. only after settlement: mark offer paid, load content, 200 with PAYMENT-RESPONSE
 """
 import asyncio
+import os
 import time
+from collections import defaultdict, deque
 
 from fastapi import APIRouter, Body, Header, Request
 from fastapi.responses import JSONResponse
@@ -18,13 +20,28 @@ from x402.http import (
     encode_payment_required_header,
     encode_payment_response_header,
 )
-from x402.schemas import ResourceInfo
+from x402.schemas import ResourceInfo, SettleResponse
 
-from payments import balances, config, deps, store
+from payments import balances, config, deps, recovery, store
 from payments.x402_server import build_requirements, get_server
 
 router = APIRouter()
 SETTLE_ATTEMPTS = 3
+RATE_LIMIT_PER_MIN = int(os.getenv("QUERY_RATE_LIMIT_PER_MIN", "30"))
+_hits = defaultdict(deque)
+
+
+def rate_limited(key):
+    """Sliding one-minute window per session (or client IP before KYA). No event on purpose: a flood must not
+    flood the live view and the events table too."""
+    now = time.time()
+    hits = _hits[key]
+    while hits and hits[0] < now - 60:
+        hits.popleft()
+    if len(hits) >= RATE_LIMIT_PER_MIN:
+        return True
+    hits.append(now)
+    return False
 
 
 def error(status, session_id, event_type, summary, payload=None, headers=None):
@@ -75,8 +92,12 @@ async def query(
     authorization: str | None = Header(None),
     payment_signature: str | None = Header(None),
 ):
-    response = await paid_query(route, request, offer_id, authorization, payment_signature)
     session = auth(authorization)
+    key = session["session_id"] if session else f"ip:{request.client.host if request.client else '?'}"
+    if rate_limited(key):
+        return JSONResponse({"error": "rate_limited", "detail": f"max {RATE_LIMIT_PER_MIN} paid requests per minute"},
+                            status_code=429, headers={"Retry-After": "60"})
+    response = await paid_query(route, request, offer_id, authorization, payment_signature)
     store.record_request(route, offer_id, session["session_id"] if session else None, response.status_code)
     return response
 
@@ -91,7 +112,19 @@ async def paid_query(route, request, offer_id, authorization, payment_signature)
     tier = config.ROUTE_TIERS.get(route)
     if offer is None or offer["session_id"] != sid:
         return error(404, sid, "payment_rejected", f"Offer {offer_id} not found for this session")
-    if store.offer_consumed(offer_id) or offer["status"] == "paid":
+    row = store.get_by_offer(offer_id)
+    if row and row["status"] == "pending":
+        # A previous attempt crashed or lost the facilitator answer: ask the chain what happened.
+        try:
+            state, tx_hash = await recovery.reconcile(row)
+        except Exception:
+            state, tx_hash = "pending", None
+        if state == "settled":
+            return deliver_recovered(sid, session, offer, row, tx_hash)
+        if state == "pending":
+            return error(409, sid, "payment_rejected", f"A payment for {offer_id} is still being settled, retry shortly",
+                         {"offer_id": offer_id})
+    elif row or offer["status"] == "paid":
         return error(409, sid, "replay_rejected", f"Offer {offer_id} already paid", {"offer_id": offer_id})
     if offer["status"] != "accepted":
         return error(409, sid, "payment_rejected", f"Offer {offer_id} is {offer['status']}")
@@ -158,7 +191,11 @@ async def paid_query(route, request, offer_id, authorization, payment_signature)
             store.release(tx_id)
             return await payment_required(request, offer, requirements, sid, verify.invalid_reason or "Verify failed")
         deps.log_event(sid, "gateway", "payment_verified", f"Payment of {tier_price} USDC verified", {"payer": payer})
+    except Exception as e:
+        store.release(tx_id)
+        return error(502, sid, "payment_rejected", f"Facilitator error: {type(e).__name__}", {"error": str(e)})
 
+    try:
         # The public facilitator sometimes fails to broadcast (its own nonce clash). Retrying is safe:
         # the EIP-3009 nonce lets the USDC contract execute this authorization at most once.
         for attempt in range(1, SETTLE_ATTEMPTS + 1):
@@ -170,25 +207,33 @@ async def paid_query(route, request, offer_id, authorization, payment_signature)
             if settle.success or "transaction_failed" not in (settle.error_reason or ""):
                 break
             await asyncio.sleep(2)
-        if not settle.success:
-            store.release(tx_id)
-            return await payment_required(request, offer, requirements, sid, settle.error_reason or "Settle failed")
     except Exception as e:
+        # Outcome unknown: the transfer may still land. The reservation stays pending and the next request on
+        # this offer settles it from the chain or releases it once the authorization expired (recovery.py).
+        return error(502, sid, "payment_rejected", f"Settlement outcome unknown ({type(e).__name__}), retry shortly",
+                     {"offer_id": offer_id, "error": str(e)})
+    if not settle.success:
         store.release(tx_id)
-        return error(502, sid, "payment_rejected", f"Facilitator error: {type(e).__name__}", {"error": str(e)})
+        return await payment_required(request, offer, requirements, sid, settle.error_reason or "Settle failed")
 
     store.mark_settled(tx_id, settle.transaction)
-    # Money has moved: from here on we always deliver. The transactions row already blocks a second sale.
+    return deliver(sid, offer, content, settle, payer, tier_price)
+
+
+def deliver(sid, offer, content, settle, payer, price_usdc, recovered=False):
+    """Money has moved: from here on we always deliver. The transactions row already blocks a second sale."""
+    offer_id = offer["offer_id"]
     try:
         deps.set_offer_status(offer_id, "paid")
     except Exception as e:
         deps.log_event(sid, "gateway", "payment_settled", f"Offer status not updated: {type(e).__name__}",
                        {"offer_id": offer_id, "error": str(e)})
     tx_url = f"{config.EXPLORER_URL}/tx/{settle.transaction}"
-    deps.log_event(sid, "gateway", "payment_settled", f"{tier_price} USDC settled", {"tx_hash": settle.transaction})
+    deps.log_event(sid, "gateway", "payment_settled",
+                   f"{price_usdc} USDC settled" + (" (recovered from the chain)" if recovered else ""),
+                   {"tx_hash": settle.transaction, "recovered": recovered})
     deps.log_event(sid, "chain", "tx_confirmed", f"Tx {settle.transaction[:10]}... confirmed",
                    {"tx_hash": settle.transaction, "explorer": tx_url})
-
     deps.log_event(sid, "gateway", "content_delivered", f"Delivered {len(content)} item(s) for {offer_id}",
                    {"offer_id": offer_id, "content_ids": offer["content_ids"]})
     return JSONResponse(
@@ -197,10 +242,21 @@ async def paid_query(route, request, offer_id, authorization, payment_signature)
             "license": offer["license"],
             "content": content,
             "receipt": {"tx_hash": settle.transaction, "explorer": tx_url, "payer": payer,
-                        "amount_usdc": tier_price, "network": config.NETWORK},
+                        "amount_usdc": price_usdc, "network": config.NETWORK},
         },
         headers={"PAYMENT-RESPONSE": encode_payment_response_header(settle)},
     )
+
+
+def deliver_recovered(sid, session, offer, row, tx_hash):
+    """The chain shows this offer was paid but the delivery never happened: deliver it to that same payer."""
+    if row["payer"] != session["wallet_address"].lower():
+        return error(409, sid, "replay_rejected", f"Offer {offer['offer_id']} already paid", {"offer_id": offer["offer_id"]})
+    content = load_content(offer)
+    if content is None:
+        return error(410, sid, "payment_rejected", "Paid content is no longer available", {"tx_hash": tx_hash})
+    settle = SettleResponse(success=True, transaction=tx_hash, network=config.NETWORK, payer=row["payer"])
+    return deliver(sid, offer, content, settle, row["payer"], row["amount_atomic"] / 1_000_000, recovered=True)
 
 
 @router.get("/receipt/{tx_hash}")
