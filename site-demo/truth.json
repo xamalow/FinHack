@@ -39,14 +39,42 @@
             "Share of European lithium-ion cell output by manufacturer, 2025, and change versus 2024 in percentage points."
           ],
           "table": {
-            "columns": ["Manufacturer", "Share 2025 (%)", "Change vs 2024 (pts)"],
+            "columns": [
+              "Manufacturer",
+              "Share 2025 (%)",
+              "Change vs 2024 (pts)"
+            ],
             "rows": [
-              ["Aurelion Cells", "31.4", "+2.4"],
-              ["Kestrel Energy Storage", "22.7", "-1.6"],
-              ["Valmora Batteries", "14.9", "+0.8"],
-              ["Brightwell Power", "11.3", "+3.4"],
-              ["Ferrovolt", "8.6", "+1.1"],
-              ["Others", "11.1", "-6.1"]
+              [
+                "Aurelion Cells",
+                "31.4",
+                "+2.4"
+              ],
+              [
+                "Kestrel Energy Storage",
+                "22.7",
+                "-1.6"
+              ],
+              [
+                "Valmora Batteries",
+                "14.9",
+                "+0.8"
+              ],
+              [
+                "Brightwell Power",
+                "11.3",
+                "+3.4"
+              ],
+              [
+                "Ferrovolt",
+                "8.6",
+                "+1.1"
+              ],
+              [
+                "Others",
+                "11.1",
+                "-6.1"
+              ]
             ]
           }
         },
@@ -56,13 +84,37 @@
             "Lithium-ion cell output and average plant utilisation by country, 2025. Poland alone produced 86.3 GWh."
           ],
           "table": {
-            "columns": ["Country", "Output 2025 (GWh)", "Utilisation (%)"],
+            "columns": [
+              "Country",
+              "Output 2025 (GWh)",
+              "Utilisation (%)"
+            ],
             "rows": [
-              ["Poland", "86.3", "78.4"],
-              ["Hungary", "58.7", "71.2"],
-              ["Germany", "47.2", "64.9"],
-              ["Sweden", "23.8", "52.7"],
-              ["France", "19.6", "58.3"]
+              [
+                "Poland",
+                "86.3",
+                "78.4"
+              ],
+              [
+                "Hungary",
+                "58.7",
+                "71.2"
+              ],
+              [
+                "Germany",
+                "47.2",
+                "64.9"
+              ],
+              [
+                "Sweden",
+                "23.8",
+                "52.7"
+              ],
+              [
+                "France",
+                "19.6",
+                "58.3"
+              ]
             ]
           }
         },
@@ -73,6 +125,12 @@
             "We conducted 43 interviews with plant managers, procurement teams and equipment suppliers between January and November 2025. Figures are rounded to one decimal place."
           ]
         }
+      ],
+      "published": "December 2025",
+      "questions": [
+        "Which manufacturers lead European lithium-ion cell production, and who is gaining ground?",
+        "Which countries produce the most cells, and how well are their plants utilised?",
+        "How are market shares measured and cross-checked?"
       ]
     },
     {
@@ -105,13 +163,37 @@
             "Average annual spot prices, battery grade, USD per tonne of lithium carbonate equivalent."
           ],
           "table": {
-            "columns": ["Year", "Carbonate (USD/t)", "Hydroxide (USD/t)"],
+            "columns": [
+              "Year",
+              "Carbonate (USD/t)",
+              "Hydroxide (USD/t)"
+            ],
             "rows": [
-              ["2021", "17,340", "18,910"],
-              ["2022", "71,850", "74,260"],
-              ["2023", "46,120", "44,730"],
-              ["2024", "13,470", "14,690"],
-              ["2025", "10,980", "11,640"]
+              [
+                "2021",
+                "17,340",
+                "18,910"
+              ],
+              [
+                "2022",
+                "71,850",
+                "74,260"
+              ],
+              [
+                "2023",
+                "46,120",
+                "44,730"
+              ],
+              [
+                "2024",
+                "13,470",
+                "14,690"
+              ],
+              [
+                "2025",
+                "10,980",
+                "11,640"
+              ]
             ]
           }
         },
@@ -121,13 +203,37 @@
             "Estimated 2025 cash cost by producer, USD per tonne of lithium carbonate equivalent, and resource type."
           ],
           "table": {
-            "columns": ["Producer", "Resource", "Cash cost 2025 (USD/t)"],
+            "columns": [
+              "Producer",
+              "Resource",
+              "Cash cost 2025 (USD/t)"
+            ],
             "rows": [
-              ["Altiplano Brine Co.", "Brine", "4,960"],
-              ["Salar Andino Minerals", "Brine", "5,870"],
-              ["Lagoa Lithium", "Hard rock", "6,640"],
-              ["Redgum Lithium", "Hard rock", "7,420"],
-              ["Copperhead Spodumene", "Hard rock", "8,315"]
+              [
+                "Altiplano Brine Co.",
+                "Brine",
+                "4,960"
+              ],
+              [
+                "Salar Andino Minerals",
+                "Brine",
+                "5,870"
+              ],
+              [
+                "Lagoa Lithium",
+                "Hard rock",
+                "6,640"
+              ],
+              [
+                "Redgum Lithium",
+                "Hard rock",
+                "7,420"
+              ],
+              [
+                "Copperhead Spodumene",
+                "Hard rock",
+                "8,315"
+              ]
             ]
           }
         },
@@ -138,6 +244,12 @@
             "Cash costs include mining, processing, royalties and logistics to port, and exclude sustaining capital. They are built bottom-up from company disclosures and 19 expert interviews."
           ]
         }
+      ],
+      "published": "November 2025",
+      "questions": [
+        "How did carbonate and hydroxide spot prices move from the boom to the bust?",
+        "How wide is the hydroxide premium over carbonate today?",
+        "Which producers are under pressure at current prices, brine or hard rock?"
       ]
     },
     {
@@ -169,13 +281,37 @@
             "Nameplate capacity of operational sites at the end of 2025, GWh per year."
           ],
           "table": {
-            "columns": ["Site", "Operator", "Capacity 2025 (GWh/yr)"],
+            "columns": [
+              "Site",
+              "Operator",
+              "Capacity 2025 (GWh/yr)"
+            ],
             "rows": [
-              ["Gdansk", "Aurelion Cells", "42.5"],
-              ["Debrecen", "Kestrel Energy Storage", "36.8"],
-              ["Magdeburg", "Valmora Batteries", "27.3"],
-              ["Lulea", "Brightwell Power", "16.4"],
-              ["Dunkirk", "Ferrovolt", "12.9"]
+              [
+                "Gdansk",
+                "Aurelion Cells",
+                "42.5"
+              ],
+              [
+                "Debrecen",
+                "Kestrel Energy Storage",
+                "36.8"
+              ],
+              [
+                "Magdeburg",
+                "Valmora Batteries",
+                "27.3"
+              ],
+              [
+                "Lulea",
+                "Brightwell Power",
+                "16.4"
+              ],
+              [
+                "Dunkirk",
+                "Ferrovolt",
+                "12.9"
+              ]
             ]
           }
         },
@@ -185,13 +321,37 @@
             "Planned nameplate capacity in 2030 and announced investment for the same sites."
           ],
           "table": {
-            "columns": ["Site", "Planned 2030 (GWh/yr)", "Investment (EUR bn)"],
+            "columns": [
+              "Site",
+              "Planned 2030 (GWh/yr)",
+              "Investment (EUR bn)"
+            ],
             "rows": [
-              ["Gdansk", "78.2", "4.85"],
-              ["Debrecen", "64.5", "3.92"],
-              ["Magdeburg", "51.6", "3.37"],
-              ["Lulea", "33.9", "2.64"],
-              ["Dunkirk", "40.7", "2.18"]
+              [
+                "Gdansk",
+                "78.2",
+                "4.85"
+              ],
+              [
+                "Debrecen",
+                "64.5",
+                "3.92"
+              ],
+              [
+                "Magdeburg",
+                "51.6",
+                "3.37"
+              ],
+              [
+                "Lulea",
+                "33.9",
+                "2.64"
+              ],
+              [
+                "Dunkirk",
+                "40.7",
+                "2.18"
+              ]
             ]
           }
         },
@@ -202,6 +362,12 @@
             "Data comes from site visits, operator disclosures and permits filed in 11 countries."
           ]
         }
+      ],
+      "published": "December 2025",
+      "questions": [
+        "Which European gigafactories are actually operational, and at what scale?",
+        "How much capacity do the leading sites plan to add by 2030?",
+        "How much investment is committed per site?"
       ]
     },
     {
@@ -233,11 +399,27 @@
             "Average cell cost by chemistry, USD per kWh, 2025 actual and 2030 forecast."
           ],
           "table": {
-            "columns": ["Chemistry", "Cost 2025 (USD/kWh)", "Cost 2030 (USD/kWh)"],
+            "columns": [
+              "Chemistry",
+              "Cost 2025 (USD/kWh)",
+              "Cost 2030 (USD/kWh)"
+            ],
             "rows": [
-              ["Sodium-ion", "87.4", "52.3"],
-              ["LFP", "71.9", "58.8"],
-              ["NMC", "98.6", "79.4"]
+              [
+                "Sodium-ion",
+                "87.4",
+                "52.3"
+              ],
+              [
+                "LFP",
+                "71.9",
+                "58.8"
+              ],
+              [
+                "NMC",
+                "98.6",
+                "79.4"
+              ]
             ]
           }
         },
@@ -247,12 +429,27 @@
             "Forecast share of sodium-ion in new battery demand in Europe by segment, 2030."
           ],
           "table": {
-            "columns": ["Segment", "Sodium-ion share 2030 (%)"],
+            "columns": [
+              "Segment",
+              "Sodium-ion share 2030 (%)"
+            ],
             "rows": [
-              ["Two-wheelers", "41.2"],
-              ["Stationary storage", "23.6"],
-              ["Entry-level electric cars", "9.7"],
-              ["Light commercial vans", "6.4"]
+              [
+                "Two-wheelers",
+                "41.2"
+              ],
+              [
+                "Stationary storage",
+                "23.6"
+              ],
+              [
+                "Entry-level electric cars",
+                "9.7"
+              ],
+              [
+                "Light commercial vans",
+                "6.4"
+              ]
             ]
           }
         },
@@ -263,6 +460,12 @@
             "Adoption forecasts combine announced supply agreements with a demand model calibrated on 36 product launches."
           ]
         }
+      ],
+      "published": "October 2025",
+      "questions": [
+        "How do sodium-ion cell costs compare with LFP and NMC today?",
+        "When could sodium-ion become cheaper than LFP?",
+        "In which segments will sodium-ion be adopted first?"
       ]
     }
   ],

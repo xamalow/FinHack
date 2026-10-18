@@ -31,6 +31,7 @@ class Document:
     title: str
     text: str
     links: list = field(default_factory=list)   # absolute same-host links (HTML only)
+    content_links: list = field(default_factory=list)  # same-host links inside the article or main body
     lines: list = field(default_factory=list)   # [(font_size, bold, text)] (PDF only)
     has_article: bool = False      # HTML page with an <article> or <main> body
 
@@ -91,19 +92,25 @@ def _parse_html(url, body):
     soup = BeautifulSoup(body, "html.parser")
     for tag in soup(["script", "style", "noscript", "template"]):
         tag.decompose()
-    links = []
-    for a in soup.find_all("a", href=True):
-        href = urljoin(url, a["href"]).split("#", 1)[0]
-        if _same_host(href, url) and href not in links:
-            links.append(href)
+    def same_host_links(node):
+        found = []
+        for a in node.find_all("a", href=True):
+            href = urljoin(url, a["href"]).split("#", 1)[0]
+            if _same_host(href, url) and href not in found:
+                found.append(href)
+        return found
+
+    links = same_host_links(soup)
     for tag in soup(["nav", "header", "footer"]):
         tag.decompose()
     body_tag = soup.find("article") or soup.find("main")
+    content_links = same_host_links(body_tag or soup)
     h1 = (body_tag or soup).find("h1")
     title = _clean(h1.get_text(" ") if h1 else (soup.title.string if soup.title else url))
     text = _clean((body_tag or soup.body or soup).get_text("\n"))
     text = "\n".join(line.strip() for line in text.splitlines() if line.strip())
-    return Document(url=url, kind="html", title=title, text=text, links=links, has_article=body_tag is not None)
+    return Document(url=url, kind="html", title=title, text=text, links=links, content_links=content_links,
+                    has_article=body_tag is not None)
 
 
 def _parse_pdf(url, body):
