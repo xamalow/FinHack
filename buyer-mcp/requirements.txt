@@ -1,0 +1,3 @@
+# P4 buyer connector. Python 3.11+. Also needs P3's buyer agent deps (payments/requirements.txt).
+-r ../payments/requirements.txt
+mcp==2.3.0

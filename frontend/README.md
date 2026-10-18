@@ -32,10 +32,12 @@ With `NEXT_PUBLIC_GATEWAY_URL` empty, every screen runs on mock data and a "mock
 
 - `PUT /publisher/rules` takes `{ raw_text }` and returns `{ tiers }` or a tier array.
 - `PATCH /publisher/catalog/{id}` takes `{ status }`. `POST /publisher/wallet` takes `{ wallet_address }`.
-- `POST /buyer/run` takes `{ mission, budget_usdc }` and returns `{ session_id }`. `POST /buyer/approve` takes `{ offer_id }`.
+- `POST /buyer/run` takes `{ mission, budget_usdc }` and returns `{ run_id, agent }` (the buyer wallet). `POST /buyer/approve` takes `{ offer_id }`.
 - `GET /balance/{address}` returns `{ balance_usdc }`.
 - SSE messages are `data: <event JSON>` with the event shape of section 6.4. Transaction hashes are in `payload.tx_hash` (or `payload.transaction` for `settle_response`).
 - `balance_changed` triggers an immediate balance refresh; the view also polls every 2 seconds.
 - The gateway must allow CORS from the frontend origin.
+- `/buyer/run` and `/buyer/approve` only accept calls from the gateway machine unless `BUYER_OWNER_TOKEN` is set (P3), so run the demo frontend locally.
+- Events with `payload.source === "mcp"` come from someone's own assistant through [buyer-mcp](../buyer-mcp/README.md): the live view tags them and the approval banner has no button, the owner answers in their assistant.
 
 Demo run sheet: [DEMO.md](DEMO.md).

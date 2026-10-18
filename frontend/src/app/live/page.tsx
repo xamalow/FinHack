@@ -27,6 +27,12 @@ const TONE: Record<Tone, { border: string; text: string; bg: string }> = {
   bad: { border: "border-l-bad", text: "text-bad", bg: "bg-bad/10" },
 };
 
+// P3 nests the offer in payload.offer, the mocks put offer_id and price at the top level.
+function approvalOffer(e: AppEvent): { offerId: string; price: number } {
+  const offer = (e.payload.offer ?? {}) as Record<string, unknown>;
+  return { offerId: String(e.payload.offer_id ?? offer.offer_id ?? ""), price: Number(e.payload.price_usdc ?? offer.price_usdc ?? 0) };
+}
+
 function findHash(p: Record<string, unknown>): string | null {
   const h = p.tx_hash ?? p.transaction;
   return typeof h === "string" && /^0x[0-9a-fA-F]{64}$/.test(h) ? h : null;
@@ -61,6 +67,10 @@ export default function LiveView() {
       // gateway not reachable yet, keep last values
     }
   }, [publisherWallet, buyerWallet]);
+  const setBuyerWalletRef = useRef((w: string) => {
+    lastBuyer.current = null;
+    setBuyerWallet(w);
+  });
   const refreshRef = useRef(refreshBalances);
   useEffect(() => {
     refreshRef.current = refreshBalances;
@@ -68,6 +78,8 @@ export default function LiveView() {
 
   const { events } = useEventStream((e) => {
     if (e.type === "balance_changed") void refreshRef.current();
+    // Any buyer (P3's agent or someone's own assistant) announces its wallet when it starts.
+    if (e.type === "mission_started" && typeof e.payload.wallet === "string") setBuyerWalletRef.current(e.payload.wallet);
     if (e.type === "mission_done" || e.type === "offer_refused_budget") setRunning(false);
   });
 
@@ -82,13 +94,24 @@ export default function LiveView() {
     return () => clearInterval(t);
   }, [refreshBalances]);
 
-  const visible = useMemo(() => events.slice(since).filter((e) => e.session_id), [events, since]);
+  // Buyer events before KYA have no session id yet, so only onboarding events are left out.
+  // The gateway logs request_received on every call; the first one is enough to tell the story.
+  const visible = useMemo(() => {
+    let seenRequest = false;
+    return events.slice(since).filter((e) => {
+      if (e.actor === "publisher") return false;
+      if (e.type !== "request_received") return true;
+      if (seenRequest) return false;
+      seenRequest = true;
+      return true;
+    });
+  }, [events, since]);
 
   const latest = visible.at(-1) ?? null;
 
   const pendingApproval = useMemo(() => {
-    const granted = new Set(visible.filter((e) => e.type === "approval_granted").map((e) => e.payload.offer_id));
-    return visible.findLast((e) => e.type === "approval_requested" && !granted.has(e.payload.offer_id)) ?? null;
+    const granted = new Set(visible.filter((e) => e.type === "approval_granted").map((e) => approvalOffer(e).offerId));
+    return visible.findLast((e) => e.type === "approval_requested" && !granted.has(approvalOffer(e).offerId)) ?? null;
   }, [visible]);
 
   const run = async () => {
@@ -109,7 +132,7 @@ export default function LiveView() {
   const approve = async () => {
     if (!pendingApproval) return;
     try {
-      await api.approve(String(pendingApproval.payload.offer_id), pendingApproval.session_id);
+      await api.approve(approvalOffer(pendingApproval).offerId, pendingApproval.session_id);
     } catch (e) {
       setError(String(e));
     }
@@ -167,12 +190,16 @@ export default function LiveView() {
           <div className="flex-1">
             <div className="font-semibold text-warn">✋ The agent needs your approval</div>
             <div className="text-sm">
-              This purchase costs {Number(pendingApproval.payload.price_usdc).toFixed(2)} USDC, more than the agent may spend on its own. Approve to let it pay.
+              This purchase costs {approvalOffer(pendingApproval).price.toFixed(2)} USDC, more than the agent may spend on its own. Approve to let it pay.
             </div>
           </div>
-          <Button variant="warn" onClick={approve}>
-            Approve {Number(pendingApproval.payload.price_usdc).toFixed(2)} USDC
-          </Button>
+          {pendingApproval.payload.source === "mcp" ? (
+            <span className="rounded-lg border border-warn/50 px-3 py-2 text-sm text-warn">Waiting for the owner to say yes in their AI assistant</span>
+          ) : (
+            <Button variant="warn" onClick={approve}>
+              Approve {approvalOffer(pendingApproval).price.toFixed(2)} USDC
+            </Button>
+          )}
         </div>
       )}
 
@@ -232,6 +259,9 @@ function EventList({ events, onSelect }: { events: AppEvent[]; onSelect: (e: App
             <div className="flex items-start gap-2">
               <span className="text-base leading-5">{l.icon}</span>
               <div className="min-w-0 flex-1">
+                {e.payload.source === "mcp" && (
+                  <div className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-accent">Via the user&apos;s own AI assistant</div>
+                )}
                 <div className={`text-sm font-semibold ${t.text}`}>{l.title}</div>
                 {l.explain && <div className="text-xs text-muted">{l.explain}</div>}
                 <div className="mt-1 text-xs text-foreground/70">{e.summary}</div>

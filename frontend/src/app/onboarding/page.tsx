@@ -125,24 +125,34 @@ const STATUS_OPTIONS: { key: CatalogStatus; icon: string; label: string; help: s
   { key: "excluded", icon: "🔒", label: "Keep private", help: "Never shown or sold", active: "border-bad bg-bad text-white" },
 ];
 
-const TIER_LABEL: Record<CatalogItem["suggested_tier"], string> = {
+const TIER_LABEL: Record<NonNullable<CatalogItem["suggested_tier"]>, string> = {
   single_fact: "a single figure",
   small_table: "a small table",
   full_section: "the full section",
 };
 
 const humanize = (s: string) => s.replace(/_/g, " ");
+// P1 marks the scanned internal page "internal"; the mock catalog uses "sensitive".
+const isInternal = (c: CatalogItem) => c.sensitivity === "internal" || c.sensitivity === "sensitive";
 
 function CatalogStep({ catalog, setCatalog, onNext }: { catalog: CatalogItem[]; setCatalog: (c: CatalogItem[]) => void; onNext: () => void }) {
+  const [error, setError] = useState<string | null>(null);
   const setStatus = async (id: string, status: CatalogStatus) => {
+    const before = catalog;
+    setError(null);
     setCatalog(catalog.map((c) => (c.content_id === id ? { ...c, status } : c)));
-    await api.setCatalogStatus(id, status);
+    try {
+      await api.setCatalogStatus(id, status);
+    } catch {
+      setCatalog(before);
+      setError("This section was flagged as internal, it can only stay private.");
+    }
   };
   const count = (s: CatalogStatus) => catalog.filter((c) => c.status === s).length;
   const reports = Object.values(
     catalog.reduce<Record<string, CatalogItem[]>>((acc, c) => ({ ...acc, [c.report_id]: [...(acc[c.report_id] ?? []), c] }), {}),
   );
-  const riskyForSale = catalog.filter((c) => c.sensitivity === "sensitive" && c.status !== "excluded");
+  const riskyForSale = catalog.filter((c) => isInternal(c) && c.status !== "excluded");
 
   return (
     <div className="space-y-4">
@@ -168,6 +178,8 @@ function CatalogStep({ catalog, setCatalog, onNext }: { catalog: CatalogItem[]; 
         </p>
       </Card>
 
+      {error && <div className="animate-fade-in rounded-xl border border-bad/40 bg-bad/10 p-3 text-sm text-bad">🔒 {error}</div>}
+
       {riskyForSale.length > 0 && (
         <div className="animate-fade-in rounded-xl border border-warn/50 bg-warn/10 p-4 text-sm">
           <span className="font-semibold text-warn">⚠️ {riskyForSale.length === 1 ? "One section looks" : `${riskyForSale.length} sections look`} internal.</span>{" "}
@@ -183,7 +195,7 @@ function CatalogStep({ catalog, setCatalog, onNext }: { catalog: CatalogItem[]; 
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-medium">{c.section}</span>
-                    {c.sensitivity === "sensitive" && <span className="rounded-full bg-warn/15 px-2 py-0.5 text-xs font-medium text-warn">Looks internal</span>}
+                    {isInternal(c) && <span className="rounded-full bg-warn/15 px-2 py-0.5 text-xs font-medium text-warn">Looks internal</span>}
                   </div>
                   <div className="mt-1 flex flex-wrap gap-1.5">
                     {c.data_types.map((d) => (
@@ -193,7 +205,7 @@ function CatalogStep({ catalog, setCatalog, onNext }: { catalog: CatalogItem[]; 
                     ))}
                   </div>
                   <div className="mt-1 text-xs text-muted">
-                    {c.status === "sellable" && `Agents can buy up to ${TIER_LABEL[c.suggested_tier]} from it.`}
+                    {c.status === "sellable" && `Agents can buy up to ${c.suggested_tier ? TIER_LABEL[c.suggested_tier] : "the full section"} from it.`}
                     {c.status === "free" && "Agents can read it for free."}
                     {c.status === "excluded" && "Hidden from agents, never sold."}
                   </div>
