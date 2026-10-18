@@ -20,3 +20,9 @@ data/
 # Node
 node_modules/
 .next/
+
+# Keys and buyer-side state (shared/keys.py, shared/signing.py, buyer-agent ledger)
+keys/
+.publisher_signing_key
+.spend_ledger.jsonl
+.pinned_publishers.json

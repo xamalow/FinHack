@@ -18,6 +18,7 @@ from fastapi.responses import JSONResponse
 import httpx
 
 from payments import balances, config, deps
+from shared.keys import load_private_key
 from shared.owner import owner_only
 from payments import router as payments_router
 
@@ -43,7 +44,7 @@ async def buyer_run(
     agent = buyer_agent.BuyerAgent(
         mission=mission,
         limits=buyer_agent.Limits(budget_usdc=budget_usdc),
-        private_key=os.environ[f"BUYER_PRIVATE_KEY_{wallet}"],
+        private_key=load_private_key(f"BUYER_PRIVATE_KEY_{wallet}"),
         manifest_url=os.getenv("BUYER_MANIFEST_URL", "http://127.0.0.1:4022/.well-known/ai-data.json"),
         log_event=deps.log_event,
         approvals=approvals,
@@ -77,7 +78,7 @@ async def buyer_treasury():
     limits = buyer_agent.Limits(budget_usdc=float(os.getenv("BUYER_BUDGET_USDC", "5.00")))
     wallets = []
     for i in range(1, 5):
-        key = os.getenv(f"BUYER_PRIVATE_KEY_{i}")
+        key = load_private_key(f"BUYER_PRIVATE_KEY_{i}")
         if not key:
             continue
         address = buyer_agent.Account.from_key(key).address

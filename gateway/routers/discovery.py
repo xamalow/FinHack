@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from gateway import p1_bridge
 from gateway.auth import AgentIdentity, agent_identity, log_request
 from gateway.tiers import current_tiers
-from shared import config, db
+from shared import config, db, signing
 from shared.schemas import DiscoverItem, DiscoverOut, Manifest, ManifestPayment
 
 router = APIRouter(tags=["discovery"])
@@ -20,12 +20,13 @@ def build_manifest() -> Optional[Manifest]:
     if not publisher.get("activated_at") or not publisher.get("wallet_address"):
         return None
     topics = sorted({c["topic"] for c in p1_bridge.get_catalog() if c["status"] != "excluded"})
-    return Manifest(
+    manifest = Manifest(
         publisher=publisher.get("name") or config.PUBLISHER_NAME,
         gateway=config.GATEWAY_PUBLIC_URL.rstrip("/"),
         topics=topics,
         payment=ManifestPayment(network=config.NETWORK, pay_to=publisher["wallet_address"]),
     )
+    return Manifest(**signing.sign_manifest(manifest.model_dump(mode="json")))
 
 
 @router.get("/.well-known/ai-data.json", response_model=Manifest)

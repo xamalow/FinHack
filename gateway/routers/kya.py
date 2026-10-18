@@ -9,7 +9,7 @@ from eth_account.messages import encode_defunct
 from fastapi import APIRouter, Depends, HTTPException, Request
 
 from gateway.auth import AgentIdentity, agent_identity, issue_token, log_request
-from shared import config, db
+from shared import config, db, sanctions
 from shared.events import log_event
 from shared.schemas import KyaChallengeOut, KyaVerifyIn, KyaVerifyOut
 
@@ -72,9 +72,13 @@ def verify(body: KyaVerifyIn, request: Request, identity: AgentIdentity = Depend
     existing = db.get_agent(identity.agent_id)
     if existing and existing["wallet_address"] != identity.wallet:
         raise _reject(identity, "agent id is already bound to another wallet")
-    if identity.wallet.lower() in config.kya_blocklist():
+    screening = sanctions.screen(identity.wallet)
+    if screening.blocked:
         db.upsert_agent(identity.agent_id, identity.wallet, "blocked")
-        raise _reject(identity, "wallet is on the blocklist (sanctions screening)")
+        log_event(None, "gateway", "sanctions_blocked",
+                  f"Wallet {identity.wallet[:6]}...{identity.wallet[-4:]} refused: {screening.detail}",
+                  {"agent_id": identity.agent_id, **screening.as_payload()})
+        raise _reject(identity, f"sanctions screening, {screening.detail}")
     if existing and existing["status"] == "blocked":
         raise _reject(identity, "agent is blocked")
     db.upsert_agent(identity.agent_id, identity.wallet, "verified")
@@ -82,6 +86,9 @@ def verify(body: KyaVerifyIn, request: Request, identity: AgentIdentity = Depend
     session_id = "ses_" + secrets.token_hex(6)
     db.insert_session(session_id, identity.agent_id, db.iso_in(config.SESSION_TTL_SECONDS))
     token = issue_token(identity.agent_id, identity.wallet, session_id)
+    log_event(session_id, "gateway", "sanctions_screened",
+              f"Wallet {identity.wallet[:6]}...{identity.wallet[-4:]} screened: {screening.detail}",
+              {"agent_id": identity.agent_id, "check": "kya", **screening.as_payload()})
 
     log_event(
         session_id, "gateway", "kya_verified",

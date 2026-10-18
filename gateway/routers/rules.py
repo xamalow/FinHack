@@ -13,7 +13,7 @@ from pydantic import BaseModel
 from gateway import llm
 from gateway.routers.discovery import build_manifest
 from gateway.tiers import PAID_ROUTES, route_for_price
-from shared import config, db
+from shared import config, db, sanctions
 from shared.events import log_event
 from shared.owner import publisher_only
 from shared.schemas import ActivateIn, Manifest, RulesConfirmIn, RulesIn, RulesOut, Tier, TierName, WalletIn
@@ -132,6 +132,11 @@ def set_wallet(body: WalletIn) -> dict:
     if not is_address(body.wallet_address):
         raise HTTPException(status_code=422, detail="Not a valid EVM address")
     wallet = to_checksum_address(body.wallet_address)
+    screening = sanctions.screen(wallet)
+    if screening.blocked:
+        log_event(None, "gateway", "sanctions_blocked", f"Payout wallet {wallet[:6]}...{wallet[-4:]} refused: {screening.detail}",
+                  {"check": "payout_wallet", **screening.as_payload()})
+        raise HTTPException(status_code=403, detail=f"Payout wallet refused by sanctions screening: {screening.detail}")
     db.update_publisher(wallet_address=wallet)
     log_event(None, "publisher", "wallet_connected", f"Publisher wallet {wallet[:6]}...{wallet[-4:]} connected",
               {"wallet_address": wallet, "network": config.NETWORK})

@@ -26,10 +26,11 @@ const TONE: Record<Tone, { dot: string; title: string; row: string }> = {
 
 const TIER_LABEL: Record<string, string> = { single_fact: "One figure", small_table: "Small table", full_section: "Full section" };
 
-const BLOCKED = new Set(["injection_ignored", "replay_rejected", "kya_rejected", "offer_rejected", "payment_rejected"]);
-const TERMINAL = new Set(["content_delivered", "no_match", "kya_rejected", "replay_rejected", "payment_rejected"]);
+const BLOCKED = new Set(["injection_ignored", "replay_rejected", "kya_rejected", "offer_rejected", "payment_rejected", "sanctions_blocked"]);
+const TERMINAL = new Set(["content_delivered", "no_match", "kya_rejected", "replay_rejected", "payment_rejected", "sanctions_blocked"]);
 // The steps worth reading in a visit; the others stay behind "show all steps".
-const KEY_STEPS = new Set(["kya_verified", "offer_validated", "payment_settled", "content_delivered", "no_match", ...BLOCKED]);
+const KEY_STEPS = new Set(["kya_verified", "sanctions_screened", "offer_validated", "payment_settled", "license_receipt_issued",
+  "content_delivered", "no_match", ...BLOCKED]);
 
 // P3 nests the offer in payload.offer, the mocks put offer_id and price at the top level.
 function approvalOffer(e: AppEvent): { offerId: string; price: number } {
@@ -67,6 +68,8 @@ function stepDetail(e: AppEvent): string {
   if (e.type === "offer_validated" && offer.tier) return `${TIER_LABEL[String(offer.tier)] ?? offer.tier} · ${Number(offer.price_usdc ?? 0).toFixed(2)} USDC`;
   if (e.type === "payment_settled") return `${usdcIn(e.summary).toFixed(2)} USDC`;
   if (e.type === "kya_verified" || e.type === "content_delivered") return "";
+  if (e.type === "sanctions_screened") return e.payload.source === "chainalysis_oracle" ? "OFAC list · Chainalysis oracle" : "";
+  if (e.type === "license_receipt_issued") return `Receipt ${String(e.payload.watermark_id ?? "")} · signed`;
   return shortSummary(e);
 }
 

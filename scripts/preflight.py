@@ -42,8 +42,11 @@ def main():
 
     print("== config")
     for var in ["JWT_SECRET", "ANTHROPIC_API_KEY", "PUBLISHER_WALLET_ADDRESS", "BUYER_PRIVATE_KEY_1"]:
-        report("OK" if os.getenv(var) else ("WARN" if var == "ANTHROPIC_API_KEY" else "FAIL"),
-               f"{var} set", "" if os.getenv(var) else "missing in .env")
+        present = os.getenv(var) or os.getenv(f"{var}_KEYSTORE")
+        report("OK" if present else ("WARN" if var == "ANTHROPIC_API_KEY" else "FAIL"),
+               f"{var} set", ("encrypted keystore" if not os.getenv(var) else "") if present else "missing in .env")
+    if os.getenv("BUYER_PRIVATE_KEY_1"):
+        report("WARN", "buyer keys in plaintext", "run scripts/encrypt_keys.py to move them to keystores + Keychain")
     mainnet = NETWORK == "eip155:8453"
     report("OK" if NETWORK in ("eip155:84532", "eip155:8453") else "WARN", "network",
            "Base mainnet, REAL USDC" if mainnet else NETWORK)
@@ -65,10 +68,19 @@ def main():
             if r.status_code == 200:
                 manifest = r.json()
                 report("OK", "publisher activated", f"pays to {manifest['payment']['pay_to']}")
+                report("OK" if manifest.get("signature") else "WARN", "manifest signed",
+                       f"signer {manifest.get('signer')}" if manifest.get("signature") else "restart the gateway on main")
             else:
                 report("WARN", "publisher activated", "manifest 404: do onboarding (rules, wallet, Activate) first")
+            owner = {"X-Owner-Token": os.getenv("PUBLISHER_OWNER_TOKEN").split(",")[0]} if os.getenv("PUBLISHER_OWNER_TOKEN") else {}
             try:
-                sales = http.get(f"{args.gateway}/transactions").json()
+                chain = http.get(f"{args.gateway}/compliance/audit-chain", headers=owner).json()
+                report("OK" if chain.get("ok") else "FAIL", "audit chain intact",
+                       f"{chain.get('checked')} events chained" if chain.get("ok") else str(chain.get("problems", [])[:2]))
+            except Exception as e:
+                report("WARN", "audit chain intact", type(e).__name__)
+            try:
+                sales = http.get(f"{args.gateway}/transactions", headers=owner).json()
                 report("OK" if not sales else "WARN", "fresh database",
                        "no sales yet" if not sales else
                        f"{len(sales)} sale(s) already: the Sales agent will not re-sell a section the same agent bought "

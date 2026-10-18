@@ -114,6 +114,9 @@ class Manifest(BaseModel):
     topics: list[str]
     payment: ManifestPayment
     license_default: License = "internal_use_only"
+    # Publisher signature over the rest of the manifest (shared/signing.py), checked by buyers before paying.
+    signer: Optional[str] = None
+    signature: Optional[str] = None
 
 
 class DiscoverItem(BaseModel):

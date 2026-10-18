@@ -142,8 +142,14 @@ Every step emits an event. The live view is built entirely from these events, so
 | Abuse of paid routes | Rate limit per minute on `/query` | `payments/router.py` |
 | Secrets | Keys live in `.env` only (git-ignored) and are masked in every logged event | `shared/events.py` |
 | Spending controls exposed | `/buyer/*` only accept calls from the machine itself, or an owner token | `payments/buyer_router.py` |
+| Paying a sanctioned party | Both sides screen wallets against the OFAC SDN list (Chainalysis on-chain oracle) at KYA, before settlement, for the payout wallet and before the buyer signs | `shared/sanctions.py` |
+| History rewritten after the fact | Every event is chained by SHA-256; `GET /compliance/audit-chain` detects any edit, deletion or insertion | `shared/audit_chain.py` |
+| Fake payment address | The publisher signs its manifest; the buyer pins the signer and refuses a changed or unsigned one | `shared/signing.py`, `buyer-agent/agent.py` |
+| Split purchases to dodge approval | Per-wallet daily and hourly caps; repeated purchases just under the approval threshold need a human | `buyer-agent/agent.py` |
+| Proof of purchase, resale | Publisher-signed license receipt per sale; per-buyer watermark traces a leaked copy back to its sale | `payments/router.py`, `payments/watermark.py` |
+| Personal data kept forever | Conversations erased after 30 days and on request; payment records kept (AML record keeping) | `shared/retention.py` |
 
-More detail: [payments/docs/SECURITY_P3.md](payments/docs/SECURITY_P3.md) and the "Sales agent guarantees" in [gateway/README.md](gateway/README.md).
+Compliance reference with regulations, tests and limits: [docs/SECURITY_AND_COMPLIANCE.md](docs/SECURITY_AND_COMPLIANCE.md). More detail: [payments/docs/SECURITY_P3.md](payments/docs/SECURITY_P3.md) and the "Sales agent guarantees" in [gateway/README.md](gateway/README.md).
 
 ---
 

@@ -9,11 +9,13 @@ Order on a paid request:
 6. only after settlement: mark offer paid, load content, 200 with PAYMENT-RESPONSE
 """
 import asyncio
+import hashlib
 import os
 import time
+from datetime import datetime, timezone
 from collections import defaultdict, deque
 
-from fastapi import APIRouter, Body, Header, Request
+from fastapi import APIRouter, Body, Depends, Header, Request
 from fastapi.responses import JSONResponse
 from x402.http import (
     decode_payment_signature_header,
@@ -22,8 +24,10 @@ from x402.http import (
 )
 from x402.schemas import ResourceInfo, SettleResponse
 
-from payments import balances, config, deps, recovery, store
+from payments import balances, config, deps, recovery, store, watermark
 from payments.x402_server import build_requirements, get_server
+from shared import sanctions, signing
+from shared.owner import publisher_only
 
 router = APIRouter()
 SETTLE_ATTEMPTS = 3
@@ -178,6 +182,12 @@ async def paid_query(route, request, offer_id, authorization, payment_signature)
     if content is None:
         return content_unavailable(sid, offer)
 
+    # Screened again right before the money moves: the list changes, and a KYA session lasts 15 minutes.
+    screening = await asyncio.to_thread(sanctions.screen, payer)
+    if screening.blocked:
+        return error(403, sid, "sanctions_blocked", f"Payer refused by sanctions screening: {screening.detail}",
+                     {"check": "payment", **screening.as_payload()})
+
     try:
         tx_id = store.reserve(offer_id, nonce, payer, pay_to, amount)
     except store.ReplayError as e:
@@ -241,8 +251,9 @@ def deliver(sid, offer, content, settle, payer, price_usdc, recovered=False):
                    {"tx_hash": settle.transaction, "recovered": recovered})
     deps.log_event(sid, "chain", "tx_confirmed", f"Tx {settle.transaction[:10]}... confirmed",
                    {"tx_hash": settle.transaction, "explorer": tx_url})
+    content, receipt = license_content(offer, content, settle.transaction, payer)
     deps.log_event(sid, "gateway", "content_delivered", f"Delivered {len(content)} item(s) for {offer_id}",
-                   {"offer_id": offer_id, "content_ids": offer["content_ids"]})
+                   {"offer_id": offer_id, "content_ids": offer["content_ids"], "watermark_id": receipt["watermark_id"]})
     return JSONResponse(
         {
             "offer_id": offer_id,
@@ -250,9 +261,32 @@ def deliver(sid, offer, content, settle, payer, price_usdc, recovered=False):
             "content": content,
             "receipt": {"tx_hash": settle.transaction, "explorer": tx_url, "payer": payer,
                         "amount_usdc": price_usdc, "network": config.NETWORK},
+            "license_receipt": receipt,
         },
-        headers={"PAYMENT-RESPONSE": encode_payment_response_header(settle)},
+        headers={"PAYMENT-RESPONSE": encode_payment_response_header(settle), "Cache-Control": "no-store"},
     )
+
+
+def license_content(offer, content, tx_hash, payer):
+    """Watermarks the content for this buyer and returns it with the publisher-signed license receipt.
+    Deterministic, so a re-delivery (recovery, /receipt) carries the same marks and the same receipt."""
+    content, wid = watermark.apply(content, offer["offer_id"], payer, offer["license"])
+    receipt = store.get_receipt(tx_hash)
+    if receipt is None:
+        tx = store.get_by_hash(tx_hash) or {}
+        receipt = signing.sign_receipt({
+            "offer_id": offer["offer_id"], "tx_hash": tx_hash, "network": config.NETWORK, "asset": config.USDC_ADDRESS,
+            "payer": payer.lower(), "pay_to": (tx.get("pay_to") or deps.get_publisher_wallet()).lower(),
+            "amount_atomic": tx.get("amount_atomic") or config.usdc_to_atomic(offer["price_usdc"]),
+            "tier": offer["tier"], "scope": offer.get("scope"), "license": offer["license"],
+            "content_ids": offer["content_ids"],
+            "content_sha256": hashlib.sha256(signing.canonical(content).encode()).hexdigest(),
+            "watermark_id": wid, "issued_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        })
+        store.save_receipt(tx_hash, offer["offer_id"], receipt)
+        deps.log_event(offer.get("session_id"), "gateway", "license_receipt_issued",
+                       f"License receipt signed for {offer['offer_id']} by {receipt['signer'][:10]}...", receipt)
+    return content, receipt
 
 
 def deliver_recovered(sid, session, offer, row, tx_hash):
@@ -285,13 +319,15 @@ async def receipt(tx_hash: str, authorization: str | None = Header(None)):
     content = load_content(offer) if offer else None
     if content is None:
         return error(410, sid, "payment_rejected", "Paid content is no longer available", {"tx_hash": tx_hash})
+    content, license_receipt = license_content(offer, content, tx["tx_hash"], tx["payer"])
     deps.log_event(sid, "gateway", "receipt_redownload", f"Re-delivered {tx['offer_id']} from receipt",
                    {"tx_hash": tx_hash})
-    return {"offer_id": tx["offer_id"], "license": offer["license"], "content": content,
-            "receipt": {"tx_hash": tx["tx_hash"], "payer": tx["payer"]}}
+    return JSONResponse({"offer_id": tx["offer_id"], "license": offer["license"], "content": content,
+                         "receipt": {"tx_hash": tx["tx_hash"], "payer": tx["payer"]}, "license_receipt": license_receipt},
+                        headers={"Cache-Control": "no-store"})
 
 
-@router.get("/transactions")
+@router.get("/transactions", dependencies=[Depends(publisher_only)])
 async def transactions():
     return store.list_all()
 
@@ -308,6 +344,6 @@ async def balance(address: str):
             "balance_atomic": atomic, "balance_usdc": atomic / 1_000_000}
 
 
-@router.get("/publisher/stats")
+@router.get("/publisher/stats", dependencies=[Depends(publisher_only)])
 async def publisher_stats():
     return {"publisher_wallet": deps.get_publisher_wallet(), **store.stats()}

@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 
 from shared import config, db
+from shared.owner import publisher_only
 
-router = APIRouter(tags=["audit"])
+router = APIRouter(tags=["audit"], dependencies=[Depends(publisher_only)])  # holds the conversation
 
 
 @router.get("/audit/{offer_id}")

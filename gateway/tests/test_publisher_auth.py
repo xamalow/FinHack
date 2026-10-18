@@ -45,3 +45,28 @@ def test_owner_token_allows_a_remote_owner(monkeypatch, remote):
 
 def test_reads_stay_public(remote):
     assert remote.get("/publisher/catalog").status_code == 200
+
+
+def test_owner_token_rotation_accepts_old_and_new(monkeypatch, remote, payments_tmp):
+    monkeypatch.setenv("PUBLISHER_OWNER_TOKEN", "new-token-0123456789,old-token-0123456789")
+    for token in ("new-token-0123456789", "old-token-0123456789"):
+        res = remote.get("/compliance/report", headers={"X-Owner-Token": token})
+        assert res.status_code == 200
+
+
+def test_expired_owner_token_is_refused(monkeypatch, remote):
+    monkeypatch.setenv("PUBLISHER_OWNER_TOKEN", "new-token-0123456789")
+    monkeypatch.setenv("PUBLISHER_OWNER_TOKEN_EXPIRES_AT", "2020-01-01")
+    res = remote.get("/compliance/report", headers={"X-Owner-Token": "new-token-0123456789"})
+    assert res.status_code == 403 and "expired" in res.json()["detail"]
+
+
+def test_ipv4_mapped_loopback_counts_as_local():
+    from shared.owner import is_loopback
+    assert is_loopback("::ffff:127.0.0.1") and is_loopback("::1") and not is_loopback("203.0.113.7")
+
+
+@pytest.fixture
+def payments_tmp(tmp_path, monkeypatch):
+    from payments import store
+    monkeypatch.setattr(store, "DB_PATH", str(tmp_path / "pay.db"))

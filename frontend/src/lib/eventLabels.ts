@@ -57,6 +57,12 @@ const LABELS: Record<string, EventLabel> = {
   offer_refused_budget: L("🙅", "Agent refuses: too expensive", "The price is above the budget its owner set.", "negotiation", "bad"),
   approval_requested: L("✋", "Agent asks its owner for approval", "This purchase is above the amount it may spend alone.", "negotiation", "warn"),
   approval_granted: L("👍", "Owner approved", "The agent may go ahead with this purchase.", "negotiation", "ok"),
+  sanctions_screened: L("🧭", "Sanctions check passed", "The wallet is not on the US Treasury (OFAC) sanctions list.", "identity", "ok"),
+  sanctions_blocked: L("🚫", "Sanctioned wallet refused", "This wallet is on a sanctions list. No sale, no payment.", "identity", "bad"),
+  manifest_signature_checked: L("🔏", "Publisher signature checked", "The agent checked that the payment address really comes from this publisher.", "identity", "ok"),
+  manifest_signature_failed: L("🚫", "Fake publisher file refused", "The payment address was not signed by the publisher. Nothing is paid.", "identity", "bad"),
+  velocity_limit_hit: L("⏱️", "Spending limit reached", "The agent hit its daily or hourly limit and stopped.", "negotiation", "bad"),
+  structuring_suspected: L("🧩", "Split purchases detected", "Several purchases just under the approval limit: a human must approve.", "negotiation", "warn"),
   offer_accepted: L("🤝", "Offer accepted", "The agent takes the offer. The price is now fixed.", "negotiation", "ok"),
 
   // Payment
@@ -75,6 +81,9 @@ const LABELS: Record<string, EventLabel> = {
   balance_watch_failed: L("⚠️", "Balances not tracked", "The blockchain could not be read right now. Payments still work.", "delivery", "warn"),
   balance_changed: L("📊", "Balances updated", "Both wallets read directly from the blockchain.", "delivery", "ok"),
   content_delivered: L("📦", "Data sent to the agent", "Only the part that was paid for.", "delivery", "ok"),
+  license_receipt_issued: L("📜", "Signed license receipt", "The publisher signs who bought what, under which license, for which payment.", "delivery", "ok"),
+  receipt_verified: L("✅", "Receipt checked by the agent", "The agent checked the publisher's signature on its license receipt.", "delivery", "ok"),
+  personal_data_purged: L("🧹", "Personal data erased", "Old conversations are deleted after the retention period. Payment records are kept.", "delivery"),
   receipt_redownload: L("🧾", "Data downloaded again", "Using the receipt, without paying twice.", "delivery"),
   data_received: L("📥", "Agent receives the data", "Stored with its payment receipt.", "delivery", "ok"),
   mission_done: L("🏁", "Mission complete", "The agent reports back to its owner.", "delivery", "ok"),

@@ -62,12 +62,16 @@ On the seller side, content has three levels set by the publisher (P1/P2): `free
 | Figures slipped past the leak filter with Unicode | NFKC, invisible characters removed, Arabic separators mapped before matching | unit tests (4 formats) |
 | Weak session secret | warning at start when `JWT_SECRET` is shorter than 32 characters | code review |
 
+### 2.4 Compliance layer (18 Oct, second pass)
+
+Sanctions screening (OFAC through the Chainalysis oracle), the SHA-256 audit chain, buyer velocity limits and structuring detection, signed license receipts, the signed and pinned manifest, encrypted keystores, per-buyer watermark, retention and erasure, hygiene. All of it is documented, with code, tests, events and regulatory references, in [docs/SECURITY_AND_COMPLIANCE.md](../../docs/SECURITY_AND_COMPLIANCE.md).
+
 ## 3. Known risks and limits
 
 | # | Risk | Impact | Status / mitigation |
 |---|---|---|---|
 | R1 | Buyer controls (`/buyer/run`, `/approve`, `/runs`, `/replay-last`) can spend our wallets. | High if reachable by others | **Mitigated**: owner token or loopback only (§2.2). Residual: the owner token is a single shared secret with no expiry or rotation, and if a public frontend calls these routes it must not ship the token in its browser bundle (use a server-side call). `/buyer/replay-last` is a demo-only route. |
-| R2 | Buyer private keys are hot keys in `.env` (plaintext). | Theft = loss of the wallet's USDC | Testnet only, small balances, `.env` git-ignored. Production: CDP server wallet or KMS (brief item 9, not done). |
+| R2 | Buyer private keys are hot keys. | Theft = loss of the wallet's USDC | **Mitigated** when `scripts/encrypt_keys.py --apply` has been run: encrypted keystores, password in the macOS Keychain. Plaintext `.env` still accepted for dev, and preflight warns. Production: CDP server wallet or KMS. |
 | R3 | Single public facilitator (x402.org). If it is down, no sale can settle. | Demo failure | Retry on broadcast errors. Backup Coinbase CDP facilitator possible through `FACILITATOR_URL` + CDP keys, not configured yet. |
 | R4 | Crash, or facilitator error, between the on-chain transfer and `mark_settled`: the row stays `pending`. | Buyer paid, no content | **Mitigated** (`payments/recovery.py`): a facilitator error during settle keeps the reservation instead of releasing it; the next request on that offer asks the USDC contract (`authorizationState`) whether the authorization was used, finds the tx hash in `AuthorizationUsed` logs, marks the sale settled and delivers to that same payer; an unused authorization is released once expired. Tested on-chain with a simulated crash (`e2e_recovery.py`). Residual: the public RPC indexes logs a few seconds late, so the first retry may answer 409 "still being settled". |
 | R5 | Pending approvals, buyer runs and balance watchers live in memory. | Lost on gateway restart | Transactions themselves are in SQLite. Acceptable for the demo. |

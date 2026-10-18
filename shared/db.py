@@ -16,6 +16,7 @@ from contextlib import contextmanager
 from datetime import datetime, timedelta, timezone
 from typing import Any, Iterator, Optional
 
+from shared import audit_chain
 from shared.config import db_path
 
 SCHEMA = """
@@ -124,7 +125,7 @@ CREATE TABLE IF NOT EXISTS events (
 CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id);
 CREATE INDEX IF NOT EXISTS idx_offers_session ON offers(session_id);
 CREATE INDEX IF NOT EXISTS idx_events_session ON events(session_id);
-"""
+""" + audit_chain.SCHEMA
 
 # Columns stored as JSON text, decoded on read.
 _JSON_COLUMNS = {"data_types", "content_ids", "tiers_json", "payload_json"}
@@ -452,10 +453,16 @@ def transactions_for_offer(offer_id: str) -> list[dict[str, Any]]:
 
 
 def insert_event(ts: str, session_id: Optional[str], actor: str, type_: str, summary: str, payload: dict) -> int:
-    return execute(
-        "INSERT INTO events (ts, session_id, actor, type, summary, payload_json) VALUES (?, ?, ?, ?, ?, ?)",
-        (ts, session_id, actor, type_, summary, json.dumps(payload, default=str)),
-    )
+    """Insert and chain the event in one write transaction (shared/audit_chain.py)."""
+    payload_json = json.dumps(payload, default=str)
+    with connect() as conn:
+        conn.execute("BEGIN IMMEDIATE")  # serialize writers across processes, so the chain never forks
+        cur = conn.execute(
+            "INSERT INTO events (ts, session_id, actor, type, summary, payload_json) VALUES (?, ?, ?, ?, ?, ?)",
+            (ts, session_id, actor, type_, summary, payload_json),
+        )
+        audit_chain.append(conn, cur.lastrowid, ts, session_id, actor, type_, summary, payload_json)
+        return cur.lastrowid
 
 
 def list_events(session_id: Optional[str] = None, after_id: int = 0, limit: int = 500) -> list[dict[str, Any]]:

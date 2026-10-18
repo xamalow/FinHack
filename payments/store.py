@@ -4,6 +4,7 @@ Replay protection lives here: nonce and offer_id are UNIQUE, so a second
 attempt with the same EIP-3009 nonce or for the same offer fails at insert time,
 before anything is sent to the facilitator.
 """
+import json
 import sqlite3
 import time
 import uuid
@@ -21,6 +22,11 @@ CREATE TABLE IF NOT EXISTS transactions (
     tx_hash TEXT,
     status TEXT NOT NULL,
     ts REAL NOT NULL
+);
+CREATE TABLE IF NOT EXISTS license_receipts (
+    tx_hash TEXT PRIMARY KEY,
+    offer_id TEXT NOT NULL,
+    receipt_json TEXT NOT NULL
 );
 CREATE TABLE IF NOT EXISTS paid_route_requests (
     ts REAL NOT NULL,
@@ -118,3 +124,21 @@ def stats():
         "by_price": [{"price_usdc": a / 1_000_000, "sales": n, "revenue_usdc": s / 1_000_000}
                      for a, n, s in by_amount],
     }
+
+
+def save_receipt(tx_hash, offer_id, receipt):
+    with _conn() as conn:
+        conn.execute("INSERT OR IGNORE INTO license_receipts VALUES (?, ?, ?)", (tx_hash, offer_id, json.dumps(receipt)))
+
+
+def get_receipt(tx_hash):
+    with _conn() as conn:
+        row = conn.execute("SELECT receipt_json FROM license_receipts WHERE tx_hash = ?", (tx_hash,)).fetchone()
+    return json.loads(row["receipt_json"]) if row else None
+
+
+def settled_sales():
+    with _conn() as conn:
+        rows = conn.execute("SELECT offer_id, payer, tx_hash, amount_atomic, ts FROM transactions "
+                            "WHERE status = 'settled' ORDER BY ts").fetchall()
+    return [dict(r) for r in rows]

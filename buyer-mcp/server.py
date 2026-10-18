@@ -11,6 +11,7 @@ Run (stdio):  .venv/bin/python buyer-mcp/server.py
 """
 from __future__ import annotations
 
+import asyncio
 import importlib.util
 import os
 import re
@@ -45,8 +46,11 @@ try:
 except ModuleNotFoundError:  # gateway code not present, keep the connector usable
     _log_event = None
 
+from shared import sanctions  # noqa: E402
+from shared.keys import load_private_key  # noqa: E402
+
 MANIFEST_URL = os.getenv("MCP_MANIFEST_URL") or os.getenv("BUYER_MANIFEST_URL", "http://127.0.0.1:8000/.well-known/ai-data.json")
-PRIVATE_KEY = os.getenv("MCP_BUYER_PRIVATE_KEY") or os.getenv("BUYER_PRIVATE_KEY_1", "")
+PRIVATE_KEY = load_private_key("MCP_BUYER_PRIVATE_KEY") or load_private_key("BUYER_PRIVATE_KEY_1") or ""
 BUDGET_USDC = float(os.getenv("MCP_BUDGET_USDC") or os.getenv("BUYER_BUDGET_USDC", "5.00"))
 SOURCE = {"source": "mcp", "client": "personal AI assistant"}
 
@@ -64,6 +68,8 @@ class State:
     approved: set[str] = field(default_factory=set)
     receipts: list[dict] = field(default_factory=list)
     mission_started: bool = False
+    manifest_signer: str | None = None
+    ledger: Any = field(default_factory=lambda: buyer_agent.SpendLedger())
 
     @property
     def remaining_usdc(self) -> float:
@@ -89,7 +95,9 @@ def emit(type: str, summary: str, payload: dict | None = None) -> None:
         print(f"event {type} not logged: {e}", file=sys.stderr)
 
 
-CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b-\x1f\x7f\u200b-\u200f\u202a-\u202e\u2066-\u2069]")
+# Control characters, bidi overrides and Unicode tag characters (invisible "ASCII smuggling" text). Zero-width
+# spaces stay: the publisher's per-buyer watermark is written with them.
+CONTROL_CHARS = re.compile(r"[\x00-\x08\x0b-\x1f\x7f\u202a-\u202e\u2066-\u2069\U000e0000-\U000e007f]")
 
 
 def untrusted(value: Any, limit: int = 2000) -> Any:
@@ -134,8 +142,17 @@ async def load_manifest(http: httpx.AsyncClient) -> dict:
         payment = manifest.get("payment", {})
         if payment.get("protocol") != "x402" or payment.get("network") != buyer_agent.NETWORK:
             raise RuntimeError("This publisher's payment terms are not supported (x402 on Base Sepolia only).")
-        S.manifest = manifest
         emit("manifest_read", f"Manifest of {manifest.get('publisher')}, pays to {payment['pay_to'][:10]}...", manifest)
+        pins = buyer_agent.load_pins()
+        ok, reason, signer, pin_now = buyer_agent.check_manifest_signature(manifest, MANIFEST_URL, pins)
+        if not ok:
+            emit("manifest_signature_failed", f"Manifest refused: {reason}", {"signer": signer})
+            raise RuntimeError(f"Publisher manifest refused, nothing will be paid: {reason}")
+        if pin_now:
+            pins["{0.scheme}://{0.netloc}".format(buyer_agent.urlparse(MANIFEST_URL))] = signer
+            buyer_agent.save_pins(pins)
+        emit("manifest_signature_checked", reason.capitalize(), {"signer": signer, "pay_to": payment["pay_to"]})
+        S.manifest, S.manifest_signer = manifest, signer
     return S.manifest
 
 
@@ -244,6 +261,14 @@ async def buy(offer_id: str, owner_approved: bool = False) -> dict:
     if problem:
         emit("offer_refused_budget", f"Refused {price} USDC: {problem}", {"offer": offer})
         return {"status": "refused", "reason": problem, "your_budget": budget_view()}
+    v_ok, force_approval, v_reason = buyer_agent.check_velocity(S.ledger.entries(S.account.address), price, S.limits)
+    if not v_ok:
+        emit("velocity_limit_hit", f"Refused {price} USDC: {v_reason}", {"offer": offer})
+        return {"status": "refused", "reason": v_reason, "your_budget": budget_view()}
+    if force_approval and not needs_approval:
+        needs_approval = True
+        if offer_id not in S.approval_asked:
+            emit("structuring_suspected", v_reason.capitalize() + ", owner approval required", {"offer": offer})
     if needs_approval and offer_id not in S.approved:
         # owner_approved counts only once the user has been asked about this very offer,
         # so the assistant cannot skip the question by setting it on the first call.
@@ -271,6 +296,12 @@ async def buy(offer_id: str, owner_approved: bool = False) -> dict:
             emit("offer_refused_budget", "Invoice rejected before signing: " + "; ".join(problems), {"problems": problems})
             return {"status": "refused", "detail": "The invoice did not match the offer, nothing was signed.", "problems": problems}
 
+        screening = await asyncio.to_thread(sanctions.screen, pay_to)
+        emit("sanctions_blocked" if screening.blocked else "sanctions_screened",
+             f"Publisher wallet {pay_to[:10]}... {screening.detail}", {"check": "pay_to", **screening.as_payload()})
+        if screening.blocked:
+            return {"status": "refused", "detail": f"The publisher wallet failed sanctions screening: {screening.detail}"}
+
         signer = buyer_agent.BuyerAgent(mission="mcp", limits=S.limits, private_key=PRIVATE_KEY, manifest_url=MANIFEST_URL)
         payload = await signer.x402_client().create_payment_payload(required)
         a = payload.payload.get("authorization", {})
@@ -288,12 +319,22 @@ async def buy(offer_id: str, owner_approved: bool = False) -> dict:
     receipt = {"offer_id": offer_id, "amount_usdc": price, "tx_hash": settle.transaction,
                "explorer": f"{buyer_agent.EXPLORER_URL}/tx/{settle.transaction}"}
     S.receipts.append(receipt)
+    S.ledger.record(S.account.address, offer_id, price, settle.transaction, pay_to)
+    license_receipt = body.get("license_receipt")
+    receipt_problems = buyer_agent.check_license_receipt(license_receipt, settle.transaction, S.account.address,
+                                                         price, S.manifest_signer)
+    emit("receipt_verified", "License receipt signed by the publisher, matches the payment" if not receipt_problems
+         else "License receipt problem: " + "; ".join(receipt_problems),
+         {"valid": not receipt_problems, "problems": receipt_problems, "license_receipt": license_receipt})
     emit("data_received", f"Data received, tx {settle.transaction[:10]}...", receipt)
     emit("mission_done", f"Bought {offer['tier']} for {price} USDC, {S.remaining_usdc:.2f} USDC left",
          {"status": "done", "spent_usdc": round(S.spent_usdc, 6), "remaining_usdc": S.remaining_usdc, "receipts": S.receipts})
     return {
         "status": "paid",
         "receipt": receipt,
+        "license_receipt": {"valid": not receipt_problems, "problems": receipt_problems,
+                            "signed_by_publisher": (license_receipt or {}).get("signer"),
+                            "watermark_id": (license_receipt or {}).get("watermark_id")},
         "license_untrusted": untrusted(body.get("license"), 300),
         "data_untrusted": untrusted(body.get("content"), 20000),
         "your_budget": budget_view(),

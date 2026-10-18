@@ -13,8 +13,11 @@ import json
 import os
 import secrets
 import sys
+import time
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Literal
+from urllib.parse import urlparse
 
 import httpx
 from eth_account import Account
@@ -28,6 +31,10 @@ from x402.http import (
 )
 from x402.mechanisms.evm.exact import ExactEvmClientScheme
 from x402.mechanisms.evm.signers import EthAccountSigner
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+from shared import sanctions, signing  # noqa: E402  (stdlib + httpx + eth_account only, no gateway code)
+from shared.keys import load_private_key  # noqa: E402
 
 NETWORK = os.getenv("NETWORK", "eip155:84532")
 USDC_ADDRESS = os.getenv("USDC_ADDRESS", "0x036CbD53842c5426634e7929541eC2318f3dCF7e")
@@ -46,6 +53,12 @@ class Limits:
     max_per_tx_usdc: float = field(default_factory=lambda: float(os.getenv("BUYER_MAX_PER_TX_USDC", "2.50")))
     approval_threshold_usdc: float = field(
         default_factory=lambda: float(os.getenv("BUYER_APPROVAL_THRESHOLD_USDC", "1.00")))
+    # Velocity limits per wallet, across runs and processes (SpendLedger below).
+    max_per_day_usdc: float = field(default_factory=lambda: float(os.getenv("BUYER_MAX_PER_DAY_USDC", "25.00")))
+    max_tx_per_hour: int = field(default_factory=lambda: int(os.getenv("BUYER_MAX_TX_PER_HOUR", "20")))
+    # Structuring: this many purchases in 24 h priced just under the approval threshold force a human approval.
+    structuring_count: int = field(default_factory=lambda: int(os.getenv("BUYER_STRUCTURING_COUNT", "3")))
+    structuring_band: float = 0.8  # "just under" = between 80 % and 100 % of the threshold
 
 
 def to_atomic(usdc):
@@ -85,6 +98,111 @@ async def read_usdc_balance(address):
         return await usdc.functions.balanceOf(AsyncWeb3.to_checksum_address(address)).call()
     finally:
         await w3.provider.disconnect()
+
+
+class SpendLedger:
+    """Append-only record of this buyer's payments (JSON lines), so the daily cap and the structuring check
+    hold across runs, restarts and the two buyers (autonomous agent and MCP connector) sharing a wallet."""
+
+    def __init__(self, path=None):
+        default = Path(__file__).resolve().parent / ".spend_ledger.jsonl"
+        self.path = Path(path or os.getenv("BUYER_LEDGER_PATH") or default)
+
+    def entries(self, wallet, within_s=86400, now=None):
+        now = now or time.time()
+        if not self.path.exists():
+            return []
+        out = []
+        for line in self.path.read_text().splitlines():
+            try:
+                e = json.loads(line)
+            except ValueError:
+                continue
+            if e.get("wallet", "").lower() == wallet.lower() and e.get("ts", 0) >= now - within_s:
+                out.append(e)
+        return out
+
+    def record(self, wallet, offer_id, amount_usdc, tx_hash, pay_to):
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        with open(self.path, "a") as f:
+            f.write(json.dumps({"ts": time.time(), "wallet": wallet.lower(), "offer_id": offer_id,
+                                "amount_usdc": amount_usdc, "tx_hash": tx_hash, "pay_to": pay_to.lower()}) + "\n")
+
+
+def check_velocity(history, price_usdc, limits, now=None):
+    """Returns (ok, force_approval, reason). history: ledger entries of the last 24 h for this wallet."""
+    now = now or time.time()
+    day = [e for e in history if e["ts"] >= now - 86400]
+    hour = [e for e in day if e["ts"] >= now - 3600]
+    spent_day = sum(float(e["amount_usdc"]) for e in day)
+    if to_atomic(spent_day + price_usdc) > to_atomic(limits.max_per_day_usdc):
+        return False, False, f"daily cap {limits.max_per_day_usdc:.2f} USDC reached ({spent_day:.2f} spent in 24 h)"
+    if len(hour) >= limits.max_tx_per_hour:
+        return False, False, f"more than {limits.max_tx_per_hour} purchases in one hour"
+
+    def near_threshold(p):
+        return limits.structuring_band * limits.approval_threshold_usdc <= float(p) <= limits.approval_threshold_usdc
+
+    if near_threshold(price_usdc):
+        near = sum(1 for e in day if near_threshold(e["amount_usdc"]))
+        if near + 1 >= limits.structuring_count:
+            return True, True, (f"possible structuring: {near + 1} purchases in 24 h just under the "
+                                f"{limits.approval_threshold_usdc:.2f} USDC approval threshold")
+    return True, False, "within velocity limits"
+
+
+def _pins_path():
+    return Path(os.getenv("BUYER_PINNED_SIGNERS_PATH") or Path(__file__).resolve().parent / ".pinned_publishers.json")
+
+
+def load_pins():
+    try:
+        return json.loads(_pins_path().read_text())
+    except (OSError, ValueError):
+        return {}
+
+
+def save_pins(pins):
+    _pins_path().write_text(json.dumps(pins, indent=1))
+
+
+def check_manifest_signature(manifest, manifest_url, pins):
+    """Trust on first use, like SSH: the first valid signer seen for a publisher origin is pinned, and from
+    then on the manifest (so its payTo) must be signed by that same key. Returns (ok, reason, signer, pin_now).
+    BUYER_TRUSTED_SIGNERS pins explicitly; BUYER_REQUIRE_SIGNED_MANIFEST=1 (default on mainnet) refuses
+    unsigned manifests even on first contact."""
+    origin = "{0.scheme}://{0.netloc}".format(urlparse(manifest_url))
+    trusted = [s.strip().lower() for s in os.getenv("BUYER_TRUSTED_SIGNERS", "").split(",") if s.strip()]
+    pinned = pins.get(origin)
+    require = os.getenv("BUYER_REQUIRE_SIGNED_MANIFEST", "1" if NETWORK == "eip155:8453" else "0") == "1"
+    ok, signer, reason = signing.verify_manifest(manifest)
+    if not ok:
+        if reason == "not signed" and not (pinned or trusted or require):
+            return True, "manifest is not signed (accepted: no key pinned for this publisher yet)", None, False
+        return False, f"manifest signature: {reason}", signer, False
+    if trusted and signer.lower() not in trusted:
+        return False, f"signer {signer} is not in BUYER_TRUSTED_SIGNERS", signer, False
+    if pinned and pinned.lower() != signer.lower():
+        return False, f"publisher signing key changed (pinned {pinned}, now {signer}): payTo cannot be trusted", signer, False
+    if pinned:
+        return True, "signature valid, signer matches the pinned key", signer, False
+    return True, "signature valid, signer pinned on first contact", signer, True
+
+
+def check_license_receipt(receipt, tx_hash, payer, price_usdc, expected_signer):
+    """Problems with the publisher's signed receipt (empty = valid). The money has moved either way;
+    a bad receipt is flagged so the owner can dispute the sale."""
+    if not receipt:
+        return ["no license receipt"]
+    ok, _, reason = signing.verify_receipt(receipt, expected_signer)
+    problems = [] if ok else [f"receipt signature: {reason}"]
+    if receipt.get("tx_hash") != tx_hash:
+        problems.append("receipt tx_hash differs from the settlement")
+    if str(receipt.get("payer", "")).lower() != payer.lower():
+        problems.append("receipt payer is not this wallet")
+    if int(receipt.get("amount_atomic", -1)) != to_atomic(price_usdc):
+        problems.append("receipt amount differs from the price paid")
+    return problems
 
 
 def check_payment_required(required, offer_price_usdc, manifest_pay_to, remaining_usdc, limits):
@@ -212,6 +330,8 @@ class BuyerAgent:
     session_id: str | None = None
     pending_offer: dict | None = None
     last_paid_request: dict | None = None
+    ledger: SpendLedger = field(default_factory=SpendLedger)
+    manifest_signer: str | None = None
 
     async def replay_last_payment(self):
         """Security demo: resend the exact request of the last successful payment (same signature, same
@@ -294,6 +414,16 @@ class BuyerAgent:
                 return self.finish("refused", "Manifest payment terms not supported")
             gateway, pay_to = manifest["gateway"], payment["pay_to"]
             self.emit("manifest_read", f"Manifest of {manifest.get('publisher')}, pays to {pay_to[:10]}...", manifest)
+            pins = load_pins()
+            ok, reason, signer, pin_now = check_manifest_signature(manifest, self.manifest_url, pins)
+            if not ok:
+                self.emit("manifest_signature_failed", f"Manifest refused: {reason}", {"signer": signer})
+                return self.finish("refused", f"Manifest refused: {reason}")
+            if pin_now:
+                pins["{0.scheme}://{0.netloc}".format(urlparse(self.manifest_url))] = signer
+                save_pins(pins)
+            self.manifest_signer = signer
+            self.emit("manifest_signature_checked", reason.capitalize(), {"signer": signer, "pay_to": pay_to})
 
             found = (await http.get(f"{gateway}/discover", params={"q": self.mission}, headers=ids)).json()
             self.emit("discover_called", "Free summary received", found)
@@ -324,6 +454,14 @@ class BuyerAgent:
                     if not ok:
                         self.emit("offer_refused_budget", f"Refused {price} USDC: {reason}", {"offer": offer})
                         return self.finish("refused", f"Refused by budget rules: {reason}")
+                    v_ok, force_approval, v_reason = check_velocity(self.ledger.entries(self.account.address), price, self.limits)
+                    if not v_ok:
+                        self.emit("velocity_limit_hit", f"Refused {price} USDC: {v_reason}", {"offer": offer})
+                        return self.finish("refused", f"Refused by velocity limits: {v_reason}")
+                    if force_approval and not needs_approval:
+                        needs_approval = True
+                        self.emit("structuring_suspected", v_reason.capitalize() + ", owner approval required",
+                                  {"offer": offer, "price_usdc": price})
 
                 decision = await self.decide(reply)
                 self.emit("offer_evaluated", f"{decision.decision}: {decision.reason}",
@@ -365,6 +503,11 @@ class BuyerAgent:
         low_balance = check_wallet_balance(price, await self.refresh_wallet())
         if low_balance:
             problems.append(low_balance)
+        screening = await asyncio.to_thread(sanctions.screen, pay_to)
+        self.emit("sanctions_blocked" if screening.blocked else "sanctions_screened",
+                  f"Publisher wallet {pay_to[:10]}... {screening.detail}", {"check": "pay_to", **screening.as_payload()})
+        if screening.blocked:
+            problems.append(f"payTo refused by sanctions screening: {screening.detail}")
         if problems:
             self.emit("offer_refused_budget", "402 rejected before signing: " + "; ".join(problems),
                       {"payment_required": required.model_dump(by_alias=True), "problems": problems})
@@ -391,6 +534,13 @@ class BuyerAgent:
         receipt = {"offer_id": offer["offer_id"], "tx_hash": settle.transaction, "amount_usdc": price,
                    "explorer": f"{EXPLORER_URL}/tx/{settle.transaction}"}
         self.receipts.append(receipt)
+        self.ledger.record(self.account.address, offer["offer_id"], price, settle.transaction, pay_to)
+        receipt_problems = check_license_receipt(body.get("license_receipt"), settle.transaction,
+                                                 self.account.address, price, self.manifest_signer)
+        self.emit("receipt_verified", "License receipt signed by the publisher, matches the payment" if not receipt_problems
+                  else "License receipt problem: " + "; ".join(receipt_problems),
+                  {"valid": not receipt_problems, "problems": receipt_problems, "license_receipt": body.get("license_receipt")})
+        receipt["license_receipt"] = body.get("license_receipt")
         self.last_paid_request = paid_request  # kept in memory only, for the replay demo
         self.data.append({"offer_id": offer["offer_id"], "license": body.get("license"), "content": body.get("content")})
         self.emit("data_received", f"Data received, tx {settle.transaction[:10]}...", receipt)
@@ -405,7 +555,7 @@ async def _cli():
     mission = sys.argv[1] if len(sys.argv) > 1 else "I need the 2025 battery market share of the top European maker"
     budget = float(sys.argv[2]) if len(sys.argv) > 2 else float(os.getenv("BUYER_BUDGET_USDC", "5"))
     agent = BuyerAgent(mission=mission, limits=Limits(budget_usdc=budget),
-                       private_key=os.environ["BUYER_PRIVATE_KEY_1"],
+                       private_key=load_private_key("BUYER_PRIVATE_KEY_1"),
                        manifest_url=os.getenv("BUYER_MANIFEST_URL", "http://127.0.0.1:4022/.well-known/ai-data.json"))
     print(json.dumps(await agent.run(), indent=2))
 

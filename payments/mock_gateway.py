@@ -11,6 +11,7 @@ from fastapi import APIRouter, Body, Header, Request
 from fastapi.responses import JSONResponse
 
 from payments import config, mock_p2
+from shared import signing
 
 router = APIRouter()
 CHALLENGES = {}
@@ -19,7 +20,7 @@ BLOCKLIST = {"0x000000000000000000000000000000000000dead"}
 
 @router.get("/.well-known/ai-data.json")
 async def manifest(request: Request):
-    return {
+    return signing.sign_manifest({
         "publisher": "Demo Research Firm",
         "gateway": str(request.base_url).rstrip("/"),
         "discover": "/discover",
@@ -28,7 +29,7 @@ async def manifest(request: Request):
         "payment": {"protocol": "x402", "network": config.NETWORK, "asset": "USDC",
                     "pay_to": mock_p2.get_publisher_wallet()},
         "license_default": "internal_use_only",
-    }
+    })
 
 
 @router.get("/discover")

@@ -6,12 +6,14 @@ import asyncio
 import json
 from typing import Optional
 
-from fastapi import APIRouter, Header, Request
+from fastapi import APIRouter, Depends, Header, Request
 from sse_starlette.sse import EventSourceResponse
 
 from shared import db
+from shared.owner import publisher_only
 
-router = APIRouter(tags=["events"])
+# The live view shows buyer conversations and wallets: publisher only (loopback or owner token).
+router = APIRouter(tags=["events"], dependencies=[Depends(publisher_only)])
 
 POLL_SECONDS = 0.3
 
