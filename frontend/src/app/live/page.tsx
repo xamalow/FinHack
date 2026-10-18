@@ -82,7 +82,8 @@ export default function LiveView() {
     return () => clearInterval(t);
   }, [refreshBalances]);
 
-  const visible = useMemo(() => events.slice(since).filter((e) => e.session_id), [events, since]);
+  // Buyer steps before KYA (mission, manifest, discover, signature) have no session yet: keep them, drop onboarding events.
+  const visible = useMemo(() => events.slice(since).filter((e) => e.session_id || e.actor !== "publisher"), [events, since]);
 
   const latest = visible.at(-1) ?? null;
 
@@ -103,6 +104,15 @@ export default function LiveView() {
     } catch (e) {
       setError(String(e));
       setRunning(false);
+    }
+  };
+
+  const replay = async () => {
+    setError(null);
+    try {
+      await api.replayLastPayment();
+    } catch (e) {
+      setError(String(e));
     }
   };
 
@@ -140,6 +150,9 @@ export default function LiveView() {
           </label>
           <Button onClick={run} disabled={running || !mission.trim()}>
             {running ? "Running…" : "Run agent"}
+          </Button>
+          <Button variant="ghost" onClick={replay} disabled={running}>
+            🔁 Replay last payment
           </Button>
           <Button variant="ghost" onClick={() => setSince(events.length)}>
             Clear

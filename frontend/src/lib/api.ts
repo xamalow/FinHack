@@ -164,6 +164,13 @@ export async function runBuyer(mission: string, budgetUsdc: number): Promise<{ r
   return { run_id: sessionId, agent: BUYER_WALLET };
 }
 
+// Security demo: the buyer resends its last paid request unchanged; the gateway must answer 409 replay_rejected.
+export async function replayLastPayment(): Promise<{ status_code?: number; delivered?: boolean }> {
+  if (!USE_MOCKS) return http("POST", "/buyer/replay-last", {});
+  emitMock({ session_id: "ses_replay", actor: "gateway", type: "replay_rejected", summary: "Nonce or offer already used, nothing delivered", payload: {} });
+  return { status_code: 409, delivered: false };
+}
+
 export async function approve(offerId: string, sessionId: string | null): Promise<void> {
   if (!USE_MOCKS) {
     await http("POST", "/buyer/approve", { offer_id: offerId });
