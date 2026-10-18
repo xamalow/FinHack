@@ -26,8 +26,10 @@ const LABELS: Record<string, EventLabel> = {
   scan_started: L("🔎", "Scanning the website", "Reading the sitemap and the pages.", "identity"),
   scan_extracting: L("📄", "Reading pages and PDFs", "Extracting the text of each report.", "identity"),
   scan_indexing: L("🗂️", "Building the catalog", "Describing each section without revealing any figure.", "identity"),
+  scan_failed: L("⚠️", "Scan failed", "The website could not be read. Check the URL and try again.", "identity", "bad"),
   scan_ready: L("✅", "Catalog ready", "The publisher can now review what is for sale.", "identity", "ok"),
   catalog_updated: L("✏️", "Catalog updated", "The publisher changed what is for sale.", "identity"),
+  rules_parsed: L("🧾", "Prices drafted", "Your rules were turned into price tiers to confirm.", "identity"),
   rules_confirmed: L("💲", "Prices confirmed", "These prices are now enforced automatically.", "identity", "ok"),
   wallet_connected: L("👛", "Wallet connected", "Sales will be paid to this wallet.", "identity", "ok"),
   activated: L("🚀", "Site activated", "AI agents can now buy data from this site.", "identity", "ok"),
@@ -55,6 +57,7 @@ const LABELS: Record<string, EventLabel> = {
   offer_refused_budget: L("🙅", "Agent refuses: too expensive", "The price is above the budget its owner set.", "negotiation", "bad"),
   approval_requested: L("✋", "Agent asks its owner for approval", "This purchase is above the amount it may spend alone.", "negotiation", "warn"),
   approval_granted: L("👍", "Owner approved", "The agent may go ahead with this purchase.", "negotiation", "ok"),
+  offer_accepted: L("🤝", "Offer accepted", "The agent takes the offer. The price is now fixed.", "negotiation", "ok"),
 
   // Payment
   payment_required_sent: L("🧾", "Invoice sent", "We tell the agent the exact amount and where to pay.", "payment", "warn"),
@@ -69,6 +72,7 @@ const LABELS: Record<string, EventLabel> = {
   replay_rejected: L("🔁", "Reused payment blocked", "The same payment cannot be used twice.", "payment", "bad"),
 
   // Delivery
+  balance_watch_failed: L("⚠️", "Balances not tracked", "The blockchain could not be read right now. Payments still work.", "delivery", "warn"),
   balance_changed: L("📊", "Balances updated", "Both wallets read directly from the blockchain.", "delivery", "ok"),
   content_delivered: L("📦", "Data sent to the agent", "Only the part that was paid for.", "delivery", "ok"),
   receipt_redownload: L("🧾", "Data downloaded again", "Using the receipt, without paying twice.", "delivery"),
