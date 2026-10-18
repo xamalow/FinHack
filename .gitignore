@@ -12,6 +12,7 @@ __pycache__/
 
 # Local data
 *.db
+*.db.bak-*
 *.db-wal
 *.db-shm
 data/
