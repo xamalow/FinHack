@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button, Card, TxLink, AddressLink, shortHex } from "@/components/ui";
 import * as api from "@/lib/api";
-import { BUYER_WALLET } from "@/lib/config";
+import { BUYER_WALLET, CHAIN_NAME } from "@/lib/config";
 import { PHASES, labelFor, type Tone } from "@/lib/eventLabels";
 import type { Actor, AppEvent } from "@/lib/types";
 import { useEventStream } from "@/lib/useEventStream";
@@ -11,7 +11,7 @@ import { useEventStream } from "@/lib/useEventStream";
 const COLUMNS: { title: string; subtitle: string; actors: Actor[] }[] = [
   { title: "🤖 Buyer AI agent", subtitle: "Works for a company, spends within its budget", actors: ["buyer"] },
   { title: "🏪 Publisher platform", subtitle: "Checks identity, negotiates, collects payment", actors: ["gateway", "sales_agent", "facilitator"] },
-  { title: "⛓️ Blockchain", subtitle: "Public record of every payment (Base Sepolia)", actors: ["chain"] },
+  { title: "⛓️ Blockchain", subtitle: `Public record of every payment (${CHAIN_NAME})`, actors: ["chain"] },
 ];
 
 const PRESETS = [

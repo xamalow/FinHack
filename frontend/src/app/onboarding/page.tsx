@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useAccount, useConnect, useDisconnect, useSwitchChain } from "wagmi";
-import { baseSepolia } from "wagmi/chains";
+import { CHAIN } from "@/app/providers";
+import { CHAIN_NAME } from "@/lib/config";
 import { Button, Card, shortHex, usdc } from "@/components/ui";
 import * as api from "@/lib/api";
 import { DEMO_SITE_URL } from "@/lib/config";
@@ -311,7 +312,7 @@ function ActivateStep() {
   const [saved, setSaved] = useState<string | null>(null);
   const [result, setResult] = useState<{ gateway: string; manifest: Manifest } | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const wrongChain = isConnected && chainId !== baseSepolia.id;
+  const wrongChain = isConnected && chainId !== CHAIN.id;
 
   useEffect(() => {
     if (address && !wrongChain && saved !== address) {
@@ -330,11 +331,11 @@ function ActivateStep() {
 
   return (
     <div className="grid gap-4 lg:grid-cols-2">
-      <Card title="Publisher wallet (Base Sepolia)">
+      <Card title={`Publisher wallet (${CHAIN_NAME})`}>
         {!isConnected ? (
           <>
             <p className="mb-4 text-sm text-muted">USDC from every sale goes straight to this wallet.</p>
-            <Button onClick={() => connectors[0] && connect({ connector: connectors[0], chainId: baseSepolia.id })} disabled={isPending}>
+            <Button onClick={() => connectors[0] && connect({ connector: connectors[0], chainId: CHAIN.id })} disabled={isPending}>
               {isPending ? "Waiting for MetaMask…" : "Connect MetaMask"}
             </Button>
             {connectError && <p className="mt-3 text-sm text-bad">{connectError.message}</p>}
@@ -349,8 +350,8 @@ function ActivateStep() {
               </button>
             </div>
             {wrongChain ? (
-              <Button variant="warn" onClick={() => switchChain({ chainId: baseSepolia.id })}>
-                Switch to Base Sepolia
+              <Button variant="warn" onClick={() => switchChain({ chainId: CHAIN.id })}>
+                Switch to {CHAIN_NAME}
               </Button>
             ) : (
               <p className="text-muted">{saved === address ? "Wallet stored as payTo." : "Saving wallet…"}</p>

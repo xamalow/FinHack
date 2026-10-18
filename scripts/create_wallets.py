@@ -1,15 +1,19 @@
-"""Generate 1 publisher wallet and 4 buyer wallets for Base Sepolia tests.
+"""Generate 1 publisher wallet and buyer wallets (4 by default).
 
 Private keys are written to .env (never committed). Only addresses are printed.
-Existing keys in .env are kept, so running it twice does not lose funded wallets.
+Existing keys are kept, so running it twice does not lose funded wallets.
+
+    python scripts/create_wallets.py                                   # testnet, .env
+    python scripts/create_wallets.py --env-file .env.mainnet --buyers 1   # dedicated mainnet wallets
 """
+import argparse
 from pathlib import Path
 
 from eth_account import Account
 
-ENV_PATH = Path(__file__).resolve().parent.parent / ".env"
-
-KEYS = ["PUBLISHER_PRIVATE_KEY"] + [f"BUYER_PRIVATE_KEY_{i}" for i in range(1, 5)]
+ROOT = Path(__file__).resolve().parent.parent
+ENV_PATH = ROOT / ".env"
+KEYS = []
 
 
 def read_env():
@@ -23,6 +27,13 @@ def read_env():
 
 
 def main():
+    global ENV_PATH, KEYS
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--env-file", default=".env")
+    parser.add_argument("--buyers", type=int, default=4)
+    args = parser.parse_args()
+    ENV_PATH = ROOT / args.env_file
+    KEYS = ["PUBLISHER_PRIVATE_KEY"] + [f"BUYER_PRIVATE_KEY_{i}" for i in range(1, args.buyers + 1)]
     env = read_env()
     new_lines = []
     for key in KEYS:

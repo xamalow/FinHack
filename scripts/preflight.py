@@ -44,7 +44,9 @@ def main():
     for var in ["JWT_SECRET", "ANTHROPIC_API_KEY", "PUBLISHER_WALLET_ADDRESS", "BUYER_PRIVATE_KEY_1"]:
         report("OK" if os.getenv(var) else ("WARN" if var == "ANTHROPIC_API_KEY" else "FAIL"),
                f"{var} set", "" if os.getenv(var) else "missing in .env")
-    report("OK" if NETWORK == "eip155:84532" else "WARN", "network", NETWORK)
+    mainnet = NETWORK == "eip155:8453"
+    report("OK" if NETWORK in ("eip155:84532", "eip155:8453") else "WARN", "network",
+           "Base mainnet, REAL USDC" if mainnet else NETWORK)
 
     print("== gateway")
     with httpx.Client(timeout=15) as http:
@@ -106,7 +108,8 @@ def main():
             balance = usdc.functions.balanceOf(address).call() / 1_000_000
             level = "OK" if balance >= DEMO_NEEDS_USDC else ("FAIL" if i == 1 else "WARN")
             report(level, f"buyer {i} {address}", f"{balance:.2f} USDC, demo needs {DEMO_NEEDS_USDC:.2f}"
-                   + ("" if level == "OK" else ", refill at faucet.circle.com (Base Sepolia)"))
+                   + ("" if level == "OK" else (", send USDC on the Base network to this address" if NETWORK == "eip155:8453"
+                                               else ", refill at faucet.circle.com (Base Sepolia)")))
         pay_to = (manifest or {}).get("payment", {}).get("pay_to") or os.getenv("PUBLISHER_WALLET_ADDRESS")
         if pay_to:
             report("OK", f"publisher {pay_to}", f"{usdc.functions.balanceOf(Web3.to_checksum_address(pay_to)).call() / 1_000_000:.2f} USDC")

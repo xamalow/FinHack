@@ -3,12 +3,15 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState } from "react";
 import { WagmiProvider, createConfig, http, injected } from "wagmi";
-import { baseSepolia } from "wagmi/chains";
+import { base, baseSepolia } from "wagmi/chains";
+import { IS_MAINNET } from "@/lib/config";
+
+export const CHAIN = IS_MAINNET ? base : baseSepolia;
 
 export const wagmiConfig = createConfig({
-  chains: [baseSepolia],
+  chains: [CHAIN],
   connectors: [injected({ target: "metaMask" })],
-  transports: { [baseSepolia.id]: http() },
+  transports: { [base.id]: http(), [baseSepolia.id]: http() },
   ssr: true,
 });
 

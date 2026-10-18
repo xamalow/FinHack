@@ -64,7 +64,7 @@ const LABELS: Record<string, EventLabel> = {
   payment_signed: L("✍️", "Agent signs the payment", "It authorizes the USDC transfer from its wallet.", "payment"),
   verify_response: L("🔍", "Payment checked", "An independent service checks the signature and the funds.", "payment", "ok"),
   payment_verified: L("✅", "Payment is valid", "Everything matches the offer.", "payment", "ok"),
-  tx_submitted: L("⛓️", "Sent to the blockchain", "The transfer is published on Base Sepolia.", "payment"),
+  tx_submitted: L("⛓️", "Sent to the blockchain", "The transfer is published on the blockchain.", "payment"),
   tx_confirmed: L("⛓️", "Confirmed on the blockchain", "The money has moved. Anyone can verify it.", "payment", "ok"),
   settle_response: L("🏦", "Payment settled", "The transfer is final.", "payment", "ok"),
   payment_settled: L("💰", "Publisher paid", "Money is received before any data is sent.", "payment", "ok"),

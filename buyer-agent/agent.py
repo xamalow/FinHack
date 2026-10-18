@@ -315,6 +315,9 @@ class BuyerAgent:
                 if offer:
                     price = float(offer["price_usdc"])
                     ok, needs_approval, reason = check_offer(price, self.spendable_usdc, self.limits)
+                    if not ok and self.spendable_usdc < self.remaining_usdc and to_atomic(price) > to_atomic(self.spendable_usdc):
+                        reason = (f"wallet holds {self.wallet_atomic / 1_000_000:.2f} USDC on-chain, "
+                                  f"below the {price} USDC price (budget left {self.remaining_usdc:.2f})")
                     if not ok:
                         self.emit("offer_refused_budget", f"Refused {price} USDC: {reason}", {"offer": offer})
                         return self.finish("refused", f"Refused by budget rules: {reason}")

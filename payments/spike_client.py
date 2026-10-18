@@ -25,7 +25,7 @@ async def main(url):
     print("buyer", account.address)
 
     client = x402Client()
-    register_exact_evm_client(client, EthAccountSigner(account), networks="eip155:84532")
+    register_exact_evm_client(client, EthAccountSigner(account), networks=os.getenv("NETWORK", "eip155:84532"))
 
     async with x402HttpxClient(client, timeout=60) as http:
         resp = await http.get(url)
