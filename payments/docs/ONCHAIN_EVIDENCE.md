@@ -18,6 +18,7 @@ and the PayAI facilitator (`https://facilitator.payai.network`, gas paid by the 
 | Time (UTC) | Scenario | Amount | Payer | Payee | Tx |
 |---|---|---|---|---|---|
 | 10-18 20:41 | x402 paid route (`payments/spike_server.py`) | 0.01 USDC | `0xc551aB5B4f72faaC4927B2E2cf2b64dC70fc7372` | `0xAd5ed0c67d17E57b87ce8Beb1a06FDe9f5e77c82` | [0x695cf3bb3a…](https://basescan.org/tx/0x695cf3bb3a354d623890ba7f87d3809ca5a607e326f33905dca0b44723e0e250) |
+| 10-18 20:45 | **Full product**: buyer agent (KYA, Sales agent, LLM decision, code guards) buys one figure through `/query/t010`, data delivered after settlement | 0.10 USDC | `0xc551aB5B4f72faaC4927B2E2cf2b64dC70fc7372` | `0xAd5ed0c67d17E57b87ce8Beb1a06FDe9f5e77c82` | [0xc70ea04371…](https://basescan.org/tx/0xc70ea043716023f1e76ef26dac5e27c814d51ae0ca541d797ee249c949d36f8f) |
 
 ## Key transactions
 
