@@ -1,4 +1,4 @@
-// Hardcoded data matching agent.md section 6, used until the real endpoints exist.
+// Hardcoded data matching the shared contracts (shared/schemas.py), used when no gateway is configured.
 // Every figure here is fake and every hash is a placeholder.
 import type {
   Actor,

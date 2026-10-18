@@ -1,6 +1,6 @@
 # Frontend (P4)
 
-Next.js app for the publisher onboarding, the live view and the publisher dashboard (agent.md section 8, P4).
+Next.js app for the publisher onboarding, the live view and the publisher dashboard.
 
 ## Run
 
@@ -23,7 +23,7 @@ With `NEXT_PUBLIC_GATEWAY_URL` empty, every screen runs on mock data and a "mock
 
 ## Code map
 
-- `src/lib/types.ts` copies the shared contracts (agent.md section 6). Keep it in sync with `/shared/schemas.py`.
+- `src/lib/types.ts` copies the shared contracts. Keep it in sync with `/shared/schemas.py`.
 - `src/lib/api.ts` is the only place that knows request and response bodies. When P2 or P3 freeze a body, adjust it here.
 - `src/lib/mocks.ts` and `src/lib/mockBus.ts` hold the fake data and the scripted event sequences (0.10 sale, 2.00 sale with approval, security refusals).
 - `src/lib/useEventStream.ts` reads the SSE stream, or the mock bus.

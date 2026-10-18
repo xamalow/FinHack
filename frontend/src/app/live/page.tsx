@@ -103,7 +103,7 @@ export default function LiveView() {
     api.getManifest().then((m) => setPublisherWallet(m.payment.pay_to), () => {});
   }, []);
 
-  // agent.md asks for a 2 second balance poll during an active session.
+  // Balances are polled every 2 seconds during an active session.
   useEffect(() => {
     void refreshBalances();
     const t = setInterval(refreshBalances, 2000);

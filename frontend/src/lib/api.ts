@@ -1,4 +1,4 @@
-// Client for the gateway endpoints in agent.md section 6.5.
+// Client for the gateway endpoints (see gateway/README.md and the gateway's /docs).
 // Request and response bodies are not frozen yet; every assumption about a body
 // shape lives in this file so plugging the real gateway only touches here.
 import { BUYER_WALLET, GATEWAY_URL, USE_MOCKS } from "./config";
