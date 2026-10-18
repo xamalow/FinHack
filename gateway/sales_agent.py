@@ -84,8 +84,21 @@ def _sellable_catalog() -> dict[str, dict]:
 
 
 def _purchase_history(agent_id: str) -> list[dict]:
-    rows = db.offers_for_agent_today(agent_id, ("accepted", "paid"))
+    """What the agent really bought today. Accepted but unpaid offers are not purchases."""
+    rows = db.offers_for_agent_today(agent_id, ("paid",))
     return [{"content_ids": r["content_ids"], "tier": r["tier"], "status": r["status"]} for r in rows]
+
+
+def _offers_counting_toward_limit(agent_id: str) -> list[dict]:
+    """Paid offers, plus accepted offers still inside their payment window (they hold a slot).
+
+    An accepted offer whose payment failed or never came stops counting once it expires.
+    """
+    now = db.now_iso()
+    return [
+        r for r in db.offers_for_agent_today(agent_id, ("accepted", "paid"))
+        if r["status"] == "paid" or r["expires_at"] > now
+    ]
 
 
 def _clarification_already_asked(session_id: str) -> bool:
@@ -134,7 +147,7 @@ def validate_output(
 
     # Daily limit: at most N sections of the same report per agent per day.
     owned: dict[str, set[str]] = {}
-    for past in db.offers_for_agent_today(agent_id, ("accepted", "paid")):
+    for past in _offers_counting_toward_limit(agent_id):
         for cid in past["content_ids"]:
             if cid in catalog:
                 owned.setdefault(catalog[cid]["report_id"], set()).add(cid)
