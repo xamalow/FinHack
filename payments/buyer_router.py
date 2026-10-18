@@ -2,13 +2,18 @@
 
 The buyer agent lives in /buyer-agent and only talks HTTP to the gateway.
 This router starts it in the background and relays human approvals.
+
+These routes spend the buyer's wallets, so only its owner may call them:
+- BUYER_OWNER_TOKEN set: header X-Owner-Token must match it, from anywhere;
+- not set: only connections from this machine (loopback socket address) are accepted.
 """
 import asyncio
+import hmac
 import importlib.util
 import os
 import secrets
 
-from fastapi import APIRouter, Body
+from fastapi import APIRouter, Body, Depends, Header, HTTPException, Request
 from fastapi.responses import JSONResponse
 
 from payments import config, deps
@@ -17,7 +22,22 @@ _spec = importlib.util.spec_from_file_location("buyer_agent", config.ROOT / "buy
 buyer_agent = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(buyer_agent)
 
-router = APIRouter()
+LOOPBACK = {"127.0.0.1", "::1"}
+
+
+def require_owner(request: Request, x_owner_token: str | None = Header(None)):
+    expected = os.getenv("BUYER_OWNER_TOKEN", "")
+    if expected:
+        if x_owner_token and hmac.compare_digest(x_owner_token.encode(), expected.encode()):
+            return
+        raise HTTPException(403, "buyer controls need a valid X-Owner-Token")
+    # request.client is the TCP peer, not a forwarded header, so it cannot be spoofed by the caller
+    if request.client and request.client.host in LOOPBACK:
+        return
+    raise HTTPException(403, "buyer controls are local only; set BUYER_OWNER_TOKEN to allow a remote owner")
+
+
+router = APIRouter(dependencies=[Depends(require_owner)])
 approvals = buyer_agent.Approvals()
 RUNS = {}
 TASKS = set()

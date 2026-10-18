@@ -16,7 +16,7 @@ payments/deps.py          the only bridge to P1/P2 code (gateway.integration), m
 scripts/                  create_wallets.py, check_funds.py
 ```
 
-Both routers are mounted in the single gateway app (`gateway/main.py`, P2). The buyer agent talks to the gateway only over HTTP, like any external agent would.
+Both routers are mounted in the single gateway app (`gateway/main.py`, P2). The buyer agent talks to the gateway only over HTTP, like any external agent would. Paid routes are public (any KYA-verified agent); the `/buyer/*` controls belong to the buyer's owner only (loopback, or `X-Owner-Token` when `BUYER_OWNER_TOKEN` is set).
 
 | Item | Value |
 |---|---|
@@ -114,6 +114,7 @@ Both live in the shared SQLite file (`DB_PATH`), next to P2's tables.
 | `BUYER_BUDGET_USDC`, `BUYER_MAX_PER_TX_USDC`, `BUYER_APPROVAL_THRESHOLD_USDC` | 5.00, 2.50, 1.00 | permission tiers |
 | `BUYER_MANIFEST_URL` | `http://127.0.0.1:4022/.well-known/ai-data.json` | where the buyer starts |
 | `RECEIPT_TTL_HOURS`, `DB_PATH`, `ANTHROPIC_API_KEY` | 24, `finhack.db`, none | receipts, storage, buyer LLM |
+| `BUYER_OWNER_TOKEN` | unset | unset: `/buyer/*` only from this machine; set: required as `X-Owner-Token` header from anywhere |
 
 Switching to mainnet: change `NETWORK`, `USDC_ADDRESS`, `FACILITATOR_URL` (CDP, with keys) and fund the wallets. The code is unchanged.
 
@@ -128,7 +129,7 @@ uv pip install --python .venv/bin/python -r requirements.txt -r payments/require
 .venv/bin/uvicorn gateway.main:app --port 8000          # full product (P1 + P2 + P3)
 # or P3 alone on mocks: .venv/bin/uvicorn payments.dev_app:app --port 4022
 
-.venv/bin/python -m pytest buyer-agent -q
+.venv/bin/python -m pytest buyer-agent payments/tests -q
 GATEWAY_URL=http://127.0.0.1:8000 .venv/bin/python payments/e2e_buyer.py
 GATEWAY_URL=http://127.0.0.1:8000 E2E_WALLET=2 .venv/bin/python payments/e2e_balances_stats.py
 .venv/bin/python payments/e2e_query.py                  # needs dev_app (uses /dev/offer)
