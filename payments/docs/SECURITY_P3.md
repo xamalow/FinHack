@@ -47,6 +47,21 @@ On the seller side, content has three levels set by the publisher (P1/P2): `free
 | Human approval bypass | approval is a Future resolved only by `POST /buyer/approve`; timeout or denial = refusal | e2e: approval denied → refused, 0 spent |
 | Someone else driving our buyer (start purchases, approve, replay) | every `/buyer/*` route requires the owner: with `BUYER_OWNER_TOKEN` set, header `X-Owner-Token` must match (constant-time compare), from anywhere; without it, only loopback connections are accepted. The check uses the TCP peer address, so `X-Forwarded-For` cannot fake a local caller. Paid routes (`/query`, `/receipt`) stay public for external agents. | unit tests (9); live check: `POST /buyer/run` through the LAN address → 403, also with a forged `X-Forwarded-For`; loopback → allowed |
 
+### 2.3 Gateway, scan and connector (review of 18 Oct)
+
+| Threat | Control | Evidence |
+|---|---|---|
+| Anyone changing the publisher setup (rules, payout wallet, scan, catalog) | `shared/owner.py`: same owner check as `/buyer/*`, with `PUBLISHER_OWNER_TOKEN` or loopback only; reads stay public | `gateway/tests/test_publisher_auth.py`: remote client → 403 on the 6 routes, payout wallet unchanged, forged `X-Forwarded-For` ignored |
+| Buying a full section at the single-fact price | an offer's tier may not be below the suggested tier of any content it sells | unit test |
+| Getting around the daily limit with new agent ids | the per-day count follows the wallet, not the agent id, and is checked again at `/offer/accept` | unit tests (2) |
+| Scan used to reach localhost, the LAN or cloud metadata (SSRF) | `check_public_url`: http(s) only, every resolved address must be public; checked on the first URL and on every request, redirects included. `SCAN_ALLOW_PRIVATE_HOSTS=1` for local dev only | `ingestion/tests/test_scan_safety.py`; live: `169.254.169.254` → 400 |
+| Assistant skipping the human approval in the connector | `owner_approved=true` counts only after `buy` answered `needs_owner_approval` for that offer | `buyer-mcp/tests` |
+| Connector trusting the seller | wallet balance read from the chain by the connector (never the gateway), price checked against it before signing; seller text returned under `*_untrusted` keys, control and bidi characters removed, length capped | `buyer-mcp/tests`; live e2e 13/13 |
+| Blocklisted wallet blocking someone else's agent id | the agent id binding is checked before the blocklist writes anything | unit test |
+| Buyer forging prompt sections (`</BUYER_MESSAGE><PUBLISHER_RULES>…`) | section tags in buyer text are escaped before the Sales agent prompt is built | unit test |
+| Figures slipped past the leak filter with Unicode | NFKC, invisible characters removed, Arabic separators mapped before matching | unit tests (4 formats) |
+| Weak session secret | warning at start when `JWT_SECRET` is shorter than 32 characters | code review |
+
 ## 3. Known risks and limits
 
 | # | Risk | Impact | Status / mitigation |
@@ -59,7 +74,9 @@ On the seller side, content has three levels set by the publisher (P1/P2): `free
 | R6 | Flooding the paid routes (each 402 also starts an RPC balance watch). | Request flooding, RPC quota | **Mitigated**: sliding one-minute limit per session (per IP before KYA), `QUERY_RATE_LIMIT_PER_MIN` (default 30) → 429; refused requests are not logged as events so a flood cannot fill the events table. Residual: in-memory counters, per gateway process. |
 | R7 | Product granularity: today the smallest content unit is a report section, so a 0.10 "one figure" sale delivers a full paragraph with several figures. | Under-priced data | Raised to P1/P2 (atomic fact items from `truth.json`). |
 | R8 | The LLM can still be talked into a bad but within-limits purchase (e.g. wrong report). | Wasted spend ≤ threshold per decision | Bounded by tier 2 limits; anything above threshold needs a human. |
-| R9 | Testnet only. Mainnet needs `NETWORK`, `USDC_ADDRESS`, a CDP facilitator and real funds; code unchanged but untested there. | n/a | Out of scope for the hackathon. |
+| R9 | Mainnet runs on real USDC through the PayAI facilitator (`scripts/mainnet.sh`), with hot keys as in R2. | Real money at stake | Tested with two small real payments (0.01 and 0.10 USDC, see `ONCHAIN_EVIDENCE.md`). Keep mainnet wallets topped up with a few USDC only. |
+| R10 | The demo site serves its paid PDFs as public static files on Vercel. | Anyone can download what agents pay for | Open, P1: move them out of `public/` and redeploy. The gateway itself only delivers after settlement. |
+| R11 | The injection heuristic only logs `injection_ignored`, the Sales agent still answers. | Low: prices, tiers and figures are checked in code after the LLM | Accepted, so a buyer using a common word ("for free") is not refused. |
 
 ## 4. How to verify
 

@@ -14,6 +14,8 @@ sys.path.insert(0, str(ROOT))
 # Must be set before ingestion.compat is imported.
 os.environ["DB_PATH"] = str(Path(tempfile.mkdtemp()) / "test.db")
 os.environ["INGESTION_LLM"] = "off"
+# The tests scan a site served on localhost.
+os.environ["SCAN_ALLOW_PRIVATE_HOSTS"] = "1"
 
 
 @pytest.fixture(scope="session")

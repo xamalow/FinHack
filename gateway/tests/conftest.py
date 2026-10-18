@@ -47,5 +47,6 @@ def seed_mock_catalog():
 def client():
     from fastapi.testclient import TestClient
     from gateway.main import app
-    with TestClient(app) as c:
+    # The publisher sets things up from its own machine: owner-only routes accept loopback callers.
+    with TestClient(app, client=("127.0.0.1", 50000)) as c:
         yield c

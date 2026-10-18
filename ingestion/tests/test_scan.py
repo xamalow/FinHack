@@ -17,7 +17,7 @@ MOCK = json.loads((Path(__file__).resolve().parents[1] / "mock_catalog.json").re
 def client(scanned):
     app = FastAPI()
     app.include_router(router)
-    return TestClient(app)
+    return TestClient(app, client=("127.0.0.1", 50000))  # the publisher, on its own machine
 
 
 def test_scan_builds_the_full_catalog(scanned):

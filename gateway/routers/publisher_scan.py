@@ -9,11 +9,13 @@ content_ids contain "#", so clients must URL-encode them in the path
 """
 from typing import Literal
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException
 from pydantic import BaseModel, HttpUrl
 
 from ingestion import catalog, store
+from ingestion.crawl import UnsafeURL, check_public_url
 from ingestion.compat import log_event
+from shared.owner import publisher_only
 
 router = APIRouter(prefix="/publisher", tags=["publisher"])
 
@@ -36,9 +38,13 @@ def _run_scan(url):
         pass  # already reported by the scan_failed event
 
 
-@router.post("/scan", status_code=202)
+@router.post("/scan", status_code=202, dependencies=[Depends(publisher_only)])
 def scan(req: ScanRequest, background_tasks: BackgroundTasks):
     url = str(req.url)
+    try:
+        check_public_url(url)
+    except UnsafeURL as err:
+        raise HTTPException(400, str(err))
     if req.wait:
         try:
             return {"status": "ready", "summary": catalog.run_scan(url)}
@@ -57,7 +63,7 @@ def get_catalog():
     return store.get_catalog()
 
 
-@router.patch("/catalog/{content_id}")
+@router.patch("/catalog/{content_id}", dependencies=[Depends(publisher_only)])
 def update_catalog_item(content_id: str, update: StatusUpdate):
     item = store.get_catalog_item(content_id)
     if item is None:

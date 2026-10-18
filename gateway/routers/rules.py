@@ -7,7 +7,7 @@ import re
 from typing import Optional
 
 from eth_utils import is_address, to_checksum_address
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 
 from gateway import llm
@@ -15,6 +15,7 @@ from gateway.routers.discovery import build_manifest
 from gateway.tiers import PAID_ROUTES, route_for_price
 from shared import config, db
 from shared.events import log_event
+from shared.owner import publisher_only
 from shared.schemas import ActivateIn, Manifest, RulesConfirmIn, RulesIn, RulesOut, Tier, TierName, WalletIn
 
 log = logging.getLogger("rules")
@@ -88,7 +89,7 @@ def get_rules() -> Optional[RulesOut]:
     return _rules_out(row) if row else None
 
 
-@router.put("/rules", response_model=RulesOut)
+@router.put("/rules", response_model=RulesOut, dependencies=[Depends(publisher_only)])
 def put_rules(body: RulesIn) -> RulesOut:
     source = "llm"
     try:
@@ -111,7 +112,7 @@ def put_rules(body: RulesIn) -> RulesOut:
     return _rules_out(db.fetch_one("SELECT * FROM rules WHERE rules_id = ?", (rules_id,)))
 
 
-@router.post("/rules/confirm", response_model=RulesOut)
+@router.post("/rules/confirm", response_model=RulesOut, dependencies=[Depends(publisher_only)])
 def confirm_rules(body: RulesConfirmIn = RulesConfirmIn()) -> RulesOut:
     row = db.latest_rules()
     if not row:
@@ -126,7 +127,7 @@ def confirm_rules(body: RulesConfirmIn = RulesConfirmIn()) -> RulesOut:
     return _rules_out(db.fetch_one("SELECT * FROM rules WHERE rules_id = ?", (row["rules_id"],)))
 
 
-@router.post("/wallet")
+@router.post("/wallet", dependencies=[Depends(publisher_only)])
 def set_wallet(body: WalletIn) -> dict:
     if not is_address(body.wallet_address):
         raise HTTPException(status_code=422, detail="Not a valid EVM address")
@@ -137,7 +138,7 @@ def set_wallet(body: WalletIn) -> dict:
     return {"wallet_address": wallet}
 
 
-@router.post("/activate", response_model=Manifest)
+@router.post("/activate", response_model=Manifest, dependencies=[Depends(publisher_only)])
 def activate(body: ActivateIn = ActivateIn()) -> Manifest:
     if not db.confirmed_rules():
         raise HTTPException(status_code=409, detail="Confirm the pricing rules first")

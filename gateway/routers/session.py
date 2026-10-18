@@ -36,6 +36,14 @@ def offer_accept(body: OfferAcceptIn, request: Request,
         db.update_offer_status(offer["offer_id"], "expired", expected_status="proposed")
         raise HTTPException(status_code=409, detail="Offer expired, ask the Sales agent again")
 
+    limit = sales_agent.daily_limit_errors(session.agent_id, offer["content_ids"], sales_agent._sellable_catalog(),
+                                           exclude_offer=offer["offer_id"])
+    if limit:
+        db.update_offer_status(offer["offer_id"], "rejected", expected_status="proposed")
+        log_event(session.session_id, "gateway", "offer_rejected", f"Offer {offer['offer_id']} refused at accept: {limit[0]}",
+                  {"offer_id": offer["offer_id"], "errors": limit})
+        raise HTTPException(status_code=409, detail=limit[0])
+
     tier = tiers_by_name().get(offer["tier"])
     if not tier or abs(tier["price_usdc"] - offer["price_usdc"]) > 1e-9:
         db.update_offer_status(offer["offer_id"], "rejected", expected_status="proposed")

@@ -68,13 +68,13 @@ def verify(body: KyaVerifyIn, request: Request, identity: AgentIdentity = Depend
     if signer != identity.wallet:
         raise _reject(identity, "signature does not match X-Agent-Wallet")
 
-    if identity.wallet.lower() in config.kya_blocklist():
-        db.upsert_agent(identity.agent_id, identity.wallet, "blocked")
-        raise _reject(identity, "wallet is on the blocklist (sanctions screening)")
-
+    # Binding first: a blocklisted wallet must not be able to rebind (and block) another agent's id.
     existing = db.get_agent(identity.agent_id)
     if existing and existing["wallet_address"] != identity.wallet:
         raise _reject(identity, "agent id is already bound to another wallet")
+    if identity.wallet.lower() in config.kya_blocklist():
+        db.upsert_agent(identity.agent_id, identity.wallet, "blocked")
+        raise _reject(identity, "wallet is on the blocklist (sanctions screening)")
     if existing and existing["status"] == "blocked":
         raise _reject(identity, "agent is blocked")
     db.upsert_agent(identity.agent_id, identity.wallet, "verified")

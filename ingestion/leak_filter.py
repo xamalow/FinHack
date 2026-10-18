@@ -10,6 +10,7 @@ small integers 0 to 10). Numbers are compared on their value, so 31.4,
 """
 import re
 import threading
+import unicodedata
 from decimal import Decimal, InvalidOperation
 
 SPACES = "    "
@@ -65,9 +66,20 @@ def _is_trivial(canon):
     return 0 <= value <= 10 or 1900 <= value <= 2100
 
 
+ARABIC_SEPARATORS = str.maketrans({"\u066b": ".", "\u066c": ","})
+
+
+def _normalize(text):
+    """Undo the usual tricks to slip a figure past the filter: compatibility forms (NFKC), invisible
+    format characters inside a number ("31\u200b.4") and Arabic decimal or thousands separators."""
+    text = unicodedata.normalize("NFKC", text or "")
+    text = "".join(c for c in text if unicodedata.category(c) != "Cf")
+    return text.translate(ARABIC_SEPARATORS)
+
+
 def extract_numbers(text):
-    """[(token as written, set of canonical values)] for every number in text."""
-    return [(m.group(0), _interpretations(m.group(0))) for m in NUMBER.finditer(text or "")]
+    """[(token after normalization, set of canonical values)] for every number in text."""
+    return [(m.group(0), _interpretations(m.group(0))) for m in NUMBER.finditer(_normalize(text))]
 
 
 def build_index(paid_texts, public_texts=()):

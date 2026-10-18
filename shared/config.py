@@ -53,7 +53,21 @@ def jwt_secret() -> str:
     secret = env("JWT_SECRET")
     if not secret:
         raise RuntimeError("JWT_SECRET is not set. Add it to .env (see .env.example).")
+    if len(secret) < 32 and not _warned_short_secret:
+        # Session tokens are HS256: a short secret can be brute-forced offline from one token.
+        _warn_short_secret()
     return secret
+
+
+_warned_short_secret = False
+
+
+def _warn_short_secret() -> None:
+    global _warned_short_secret
+    _warned_short_secret = True
+    import sys
+    print("WARNING: JWT_SECRET is shorter than 32 characters, session tokens can be forged. "
+          "Generate one with: python -c \"import secrets; print(secrets.token_hex(32))\"", file=sys.stderr)
 
 
 def kya_blocklist() -> set[str]:

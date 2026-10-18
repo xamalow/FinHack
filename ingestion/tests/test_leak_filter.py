@@ -28,6 +28,10 @@ INDEX = build_index(PAID, PUBLIC)
     "renewal at 48 500 EUR",
     "the market moved by 2.4 points",
     "we spoke to 43 people",
+    "share is 31\u200b.4%",          # zero-width space inside the number
+    "price 1\u200d7,340 USD",       # zero-width joiner
+    "share is \uff13\uff11.\uff14%",  # full-width digits
+    "share is \u0663\u0661\u066b\u0664",  # Arabic-Indic digits and decimal separator
 ])
 def test_catches_paid_figure_in_any_format(text):
     assert contains_paid_figures(text, INDEX)

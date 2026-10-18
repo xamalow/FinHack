@@ -144,26 +144,50 @@ def validate_output(
             errors.append(f"content_id {cid} is not sellable (unknown or excluded)")
         elif item["status"] != "sellable":
             errors.append(f"content_id {cid} has status {item['status']}, only sellable content can be sold")
+        # The price follows what is delivered: a whole item is delivered, so never below its own tier.
+        elif tier and TIER_RANK.get(offer.tier, 0) < TIER_RANK.get(item.get("suggested_tier") or "", 0):
+            errors.append(f"tier {offer.tier} is below the tier of {cid} ({item['suggested_tier']})")
 
-    # Daily limit: at most N sections of the same report per agent per day.
+    errors.extend(daily_limit_errors(agent_id, offer.content_ids, catalog))
+    return errors
+
+
+TIER_RANK = {"single_fact": 1, "small_table": 2, "full_section": 3}
+
+
+def daily_limit_errors(agent_id: str, content_ids: list[str], catalog: dict[str, dict], exclude_offer: str = "") -> list[str]:
+    """At most N sections of the same report per wallet per day. Also re-checked when an offer is accepted,
+    so collecting several proposals and accepting them all does not get around it."""
     owned: dict[str, set[str]] = {}
     for past in _offers_counting_toward_limit(agent_id):
+        if past["offer_id"] == exclude_offer:
+            continue
         for cid in past["content_ids"]:
             if cid in catalog:
                 owned.setdefault(catalog[cid]["report_id"], set()).add(cid)
-    for cid in offer.content_ids:
+    errors = []
+    for cid in content_ids:
         if cid in catalog:
             report = catalog[cid]["report_id"]
-            sections = owned.get(report, set()) | {cid}
-            if len(sections) > config.DAILY_SECTION_LIMIT:
+            if len(owned.get(report, set()) | {cid}) > config.DAILY_SECTION_LIMIT:
                 errors.append(f"daily limit of {config.DAILY_SECTION_LIMIT} sections of {report} reached")
     return errors
+
+
+_SECTION_TAG = re.compile(
+    r"<(?=\s*/?\s*(BUYER_MESSAGE|CATALOG|TIERS|PUBLISHER_RULES|PURCHASE_HISTORY|CONVERSATION_SO_FAR"
+    r"|ROUND|VALIDATION_ERRORS)\b)", re.IGNORECASE)
+
+
+def _defang(text: str) -> str:
+    """A buyer cannot close <BUYER_MESSAGE> early or forge a section such as <PUBLISHER_RULES>."""
+    return _SECTION_TAG.sub("&lt;", text)
 
 
 def _prompt(session_id: str, agent_id: str, buyer_message: str, catalog: dict[str, dict], rounds: int,
             feedback: Optional[list[str]] = None) -> str:
     rules = db.confirmed_rules()
-    history = [{"role": m["role"], "content": m["content"]} for m in db.list_messages(session_id)[:-1]]
+    history = [{"role": m["role"], "content": _defang(m["content"])} for m in db.list_messages(session_id)[:-1]]
     parts = [
         "<CATALOG>\n" + json.dumps(list(catalog.values()), indent=1) + "\n</CATALOG>",
         "<TIERS>\n" + json.dumps(list(tiers_by_name().values()), indent=1) + "\n</TIERS>",
@@ -171,7 +195,7 @@ def _prompt(session_id: str, agent_id: str, buyer_message: str, catalog: dict[st
         "<PURCHASE_HISTORY>\n" + json.dumps(_purchase_history(agent_id)) + "\n</PURCHASE_HISTORY>",
         "<CONVERSATION_SO_FAR>\n" + json.dumps(history) + "\n</CONVERSATION_SO_FAR>",
         f"<ROUND>{rounds} of {config.MAX_NEGOTIATION_ROUNDS}</ROUND>",
-        "<BUYER_MESSAGE>\n" + buyer_message + "\n</BUYER_MESSAGE>",
+        "<BUYER_MESSAGE>\n" + _defang(buyer_message) + "\n</BUYER_MESSAGE>",
     ]
     if feedback:
         parts.append(

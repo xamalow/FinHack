@@ -419,10 +419,15 @@ def update_offer_status(
 
 
 def offers_for_agent_today(agent_id: str, statuses: tuple[str, ...]) -> list[dict[str, Any]]:
+    """Today's offers of every agent_id sharing this agent's wallet: the agent_id is a free string the agent
+    chooses, the wallet is what KYA proves, so limits follow the wallet."""
     marks = ",".join("?" * len(statuses))
     return fetch_all(
-        f"""SELECT o.* FROM offers o JOIN sessions s ON s.session_id = o.session_id
-            WHERE s.agent_id = ? AND o.status IN ({marks}) AND o.created_at LIKE ?
+        f"""SELECT o.* FROM offers o
+            JOIN sessions s ON s.session_id = o.session_id
+            JOIN agents a ON a.agent_id = s.agent_id
+            WHERE lower(a.wallet_address) = (SELECT lower(wallet_address) FROM agents WHERE agent_id = ?)
+              AND o.status IN ({marks}) AND o.created_at LIKE ?
             ORDER BY o.created_at""",
         (agent_id, *statuses, f"{today_prefix()}%"),
     )

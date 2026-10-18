@@ -8,7 +8,10 @@ or followed as instructions.
 """
 import copy
 import io
+import ipaddress
+import os
 import re
+import socket
 import unicodedata
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass, field
@@ -158,6 +161,30 @@ def _parse_pdf(url, body):
     return Document(url=url, kind="pdf", title=title, text="\n".join(t for _, _, t in lines), lines=lines)
 
 
+class UnsafeURL(ValueError):
+    """The scan was pointed at something that is not a public website."""
+
+
+def check_public_url(url):
+    """Refuse anything but http(s) on a host that resolves to public addresses only, so a scan cannot be
+    used to reach localhost, the private network or a cloud metadata endpoint. Checked on every request,
+    redirects included. SCAN_ALLOW_PRIVATE_HOSTS=1 lifts the address check for local development."""
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https") or not parsed.hostname:
+        raise UnsafeURL(f"only http(s) URLs can be scanned: {url}")
+    if os.getenv("SCAN_ALLOW_PRIVATE_HOSTS") == "1":
+        return
+    port = parsed.port or (443 if parsed.scheme == "https" else 80)
+    try:
+        infos = socket.getaddrinfo(parsed.hostname, port, proto=socket.IPPROTO_TCP)
+    except socket.gaierror as err:
+        raise UnsafeURL(f"cannot resolve {parsed.hostname}") from err
+    for info in infos:
+        address = ipaddress.ip_address(info[4][0])
+        if not address.is_global:
+            raise UnsafeURL(f"{parsed.hostname} resolves to a non-public address ({address})")
+
+
 def _fetch(client, url):
     with client.stream("GET", url) as res:
         res.raise_for_status()
@@ -177,7 +204,9 @@ def crawl(base_url, on_document=None):
     base_url = base_url.rstrip("/") + "/"
     docs, blocked, errors = [], [], []
     headers = {"User-Agent": USER_AGENT}
-    with httpx.Client(headers=headers, timeout=TIMEOUT, follow_redirects=True) as client:
+    check_public_url(base_url)
+    hooks = {"request": [lambda request: check_public_url(str(request.url))]}
+    with httpx.Client(headers=headers, timeout=TIMEOUT, follow_redirects=True, event_hooks=hooks) as client:
         robots = _robots(client, base_url)
         urls = _sitemap_urls(client, base_url, robots)
         follow_links = not urls

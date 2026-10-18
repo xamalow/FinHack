@@ -80,8 +80,11 @@ async def read_usdc_balance(address):
     from web3 import AsyncHTTPProvider, AsyncWeb3
 
     w3 = AsyncWeb3(AsyncHTTPProvider(RPC_URL))
-    usdc = w3.eth.contract(address=AsyncWeb3.to_checksum_address(USDC_ADDRESS), abi=BALANCE_OF_ABI)
-    return await usdc.functions.balanceOf(AsyncWeb3.to_checksum_address(address)).call()
+    try:
+        usdc = w3.eth.contract(address=AsyncWeb3.to_checksum_address(USDC_ADDRESS), abi=BALANCE_OF_ABI)
+        return await usdc.functions.balanceOf(AsyncWeb3.to_checksum_address(address)).call()
+    finally:
+        await w3.provider.disconnect()
 
 
 def check_payment_required(required, offer_price_usdc, manifest_pay_to, remaining_usdc, limits):
