@@ -8,7 +8,7 @@ const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "FinHack, sell your data to AI agents",
+  title: "Doubloon, sell your data to AI agents",
   description: "Turn your proprietary content into data AI agents can discover, negotiate and pay for in stablecoins.",
 };
 

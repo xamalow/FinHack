@@ -3,9 +3,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button, Card, TxLink, AddressLink, atomicToUsdc, shortHex, toDate } from "@/components/ui";
 import * as api from "@/lib/api";
-import { BUYER_WALLET, CHAIN_NAME, USE_MOCKS } from "@/lib/config";
+import { CHAIN_NAME, USE_MOCKS } from "@/lib/config";
 import { PHASES, labelFor, type Tone } from "@/lib/eventLabels";
-import type { AppEvent, Transaction } from "@/lib/types";
+import type { AppEvent, Audit, Transaction } from "@/lib/types";
 import { useEventStream } from "@/lib/useEventStream";
 
 const PLATFORM = ["gateway", "sales_agent", "facilitator"];
@@ -24,8 +24,12 @@ const TONE: Record<Tone, { dot: string; title: string; row: string }> = {
   bad: { dot: "bg-bad", title: "text-bad", row: "bg-bad/5" },
 };
 
+const TIER_LABEL: Record<string, string> = { single_fact: "One figure", small_table: "Small table", full_section: "Full section" };
+
 const BLOCKED = new Set(["injection_ignored", "replay_rejected", "kya_rejected", "offer_rejected", "payment_rejected"]);
 const TERMINAL = new Set(["content_delivered", "no_match", "kya_rejected", "replay_rejected", "payment_rejected"]);
+// The steps worth reading in a visit; the others stay behind "show all steps".
+const KEY_STEPS = new Set(["kya_verified", "offer_validated", "payment_settled", "content_delivered", "no_match", ...BLOCKED]);
 
 // P3 nests the offer in payload.offer, the mocks put offer_id and price at the top level.
 function approvalOffer(e: AppEvent): { offerId: string; price: number } {
@@ -40,6 +44,13 @@ function findHash(p: Record<string, unknown>): string | null {
 
 const usdcIn = (s: string) => Number(/([\d.]+)\s*USDC/.exec(s)?.[1] ?? 0);
 const clock = (ts: string) => new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+const sameDay = (a: Date, b: Date) => a.toDateString() === b.toDateString();
+const when = (d: Date) =>
+  sameDay(d, new Date())
+    ? d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+    : d.toLocaleDateString([], { day: "numeric", month: "short" }) + " " + d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+// The audit returns content_ids either as a list or as its string form.
+const contentIds = (v: unknown): string[] => (Array.isArray(v) ? v.map(String) : String(v ?? "").match(/[\w-]+#[\w.]+/g) ?? []);
 
 // One short line per event: drop the technical prefixes the backend adds for the raw log.
 function shortSummary(e: AppEvent): string {
@@ -48,6 +59,15 @@ function shortSummary(e: AppEvent): string {
     .replace(/^(accept|refuse|counter):\s*/i, (m) => `${m[0].toUpperCase()}${m.slice(1, -2)} · `)
     .replace(/^Mission:\s*/i, "")
     .replace(/0x[0-9a-fA-F]{40,64}/g, (h) => `${h.slice(0, 6)}…${h.slice(-4)}`);
+}
+
+// The detail shown next to a key step: what was offered, what was paid.
+function stepDetail(e: AppEvent): string {
+  const offer = (e.payload.offer ?? {}) as Record<string, unknown>;
+  if (e.type === "offer_validated" && offer.tier) return `${TIER_LABEL[String(offer.tier)] ?? offer.tier} · ${Number(offer.price_usdc ?? 0).toFixed(2)} USDC`;
+  if (e.type === "payment_settled") return `${usdcIn(e.summary).toFixed(2)} USDC`;
+  if (e.type === "kya_verified" || e.type === "content_delivered") return "";
+  return shortSummary(e);
 }
 
 // Internal steps that add noise to the story; they stay in the raw data drawer.
@@ -149,7 +169,6 @@ type Payment = {
   ts: string;
   amount: number;
   hash: string | null;
-  payer: string | null;
   state: "settling" | "confirmed" | "refused";
   count?: number;
 };
@@ -159,29 +178,14 @@ type Payment = {
 function paymentsOf(txs: Transaction[], visible: AppEvent[], now: number): Payment[] {
   const out: Payment[] = txs
     .filter((x) => x.status === "settled")
-    .map((x) => ({
-      key: x.tx_id,
-      ts: toDate(x.ts).toISOString(),
-      amount: atomicToUsdc(x.amount_atomic),
-      hash: x.tx_hash,
-      payer: x.payer,
-      state: "confirmed" as const,
-    }));
+    .map((x) => ({ key: x.tx_id, ts: toDate(x.ts).toISOString(), amount: atomicToUsdc(x.amount_atomic), hash: x.tx_hash, state: "confirmed" as const }));
   const lastSettled = out.reduce((m, p) => (p.ts > m ? p.ts : m), "");
   for (const e of visible) {
     if (e.type === "payment_verified" && e.ts > lastSettled && now - Date.parse(e.ts) < 120_000) {
       const settled = visible.some((x) => x.type === "payment_settled" && x.session_id === e.session_id && x.ts >= e.ts);
-      if (!settled)
-        out.push({
-          key: `v${e.event_id ?? e.ts}`,
-          ts: e.ts,
-          amount: usdcIn(e.summary),
-          hash: null,
-          payer: typeof e.payload.payer === "string" ? e.payload.payer : null,
-          state: "settling",
-        });
+      if (!settled) out.push({ key: `v${e.event_id ?? e.ts}`, ts: e.ts, amount: usdcIn(e.summary), hash: null, state: "settling" });
     }
-    if (e.type === "replay_rejected") out.push({ key: `r${e.event_id ?? e.ts}`, ts: e.ts, amount: 0, hash: null, payer: null, state: "refused" });
+    if (e.type === "replay_rejected") out.push({ key: `r${e.event_id ?? e.ts}`, ts: e.ts, amount: 0, hash: null, state: "refused" });
   }
   // Several replays in a row are one story: keep a single card with a count.
   const merged: Payment[] = [];
@@ -206,6 +210,8 @@ function readClearedAt(): string {
   }
 }
 
+type Sale = { tx: Transaction; what: string; tier: string; agent: string | null };
+
 export default function LiveView() {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -213,53 +219,67 @@ export default function LiveView() {
   const [since, setSince] = useState(0);
   const [clearedAt, setClearedAt] = useState(() => (typeof window === "undefined" ? "" : readClearedAt()));
   const [publisherWallet, setPublisherWallet] = useState<string | null>(null);
-  const [balances, setBalances] = useState<{ buyer: number | null; publisher: number | null }>({ buyer: null, publisher: null });
-  const [buyerWallet, setBuyerWallet] = useState(BUYER_WALLET);
+  const [walletBalance, setWalletBalance] = useState<number | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [txs, setTxs] = useState<Transaction[]>([]);
+  const [audits, setAudits] = useState<Record<string, Audit | null>>({});
+  const [titles, setTitles] = useState<Record<string, string>>({});
 
-  const refreshBalances = useCallback(async () => {
+  const refreshBalance = useCallback(async () => {
+    if (!publisherWallet) return;
     try {
-      const [buyer, publisher] = await Promise.all([
-        api.getBalance(buyerWallet),
-        publisherWallet ? api.getBalance(publisherWallet) : Promise.resolve(null),
-      ]);
-      setBalances({ buyer, publisher });
+      setWalletBalance(await api.getBalance(publisherWallet));
     } catch {
-      // gateway not reachable yet, keep last values
+      // gateway not reachable yet, keep last value
     }
-  }, [publisherWallet, buyerWallet]);
+  }, [publisherWallet]);
   const refreshTxs = useCallback(() => {
     api.getTransactions().then(setTxs, () => {});
   }, []);
-  const refreshRef = useRef(refreshBalances);
-  useEffect(() => {
-    refreshRef.current = refreshBalances;
-  }, [refreshBalances]);
+  const refreshRef = useRef(refreshBalance);
   const refreshTxsRef = useRef(refreshTxs);
+  useEffect(() => {
+    refreshRef.current = refreshBalance;
+  }, [refreshBalance]);
+
+  const { events, connected } = useEventStream((e) => {
+    if (e.type === "balance_changed") void refreshRef.current();
+    if (e.type === "payment_settled") setTimeout(refreshTxsRef.current, 300);
+  }, 0);
+
+  useEffect(() => {
+    api.getManifest().then((m) => setPublisherWallet(m.payment.pay_to), () => {});
+    api.getCatalog().then(
+      (items) => setTitles(Object.fromEntries(items.map((c) => [c.content_id, `${c.title} · ${c.section}`]))),
+      () => {},
+    );
+  }, []);
+
+  // agent.md asks for a 2 second balance poll during an active session.
+  useEffect(() => {
+    void refreshBalance();
+    const t = setInterval(refreshBalance, 2000);
+    return () => clearInterval(t);
+  }, [refreshBalance]);
+
   useEffect(() => {
     refreshTxs();
     const t = setInterval(refreshTxs, 3000);
     return () => clearInterval(t);
   }, [refreshTxs]);
 
-  const { events, connected } = useEventStream((e) => {
-    if (e.type === "balance_changed") void refreshRef.current();
-    if (e.type === "payment_settled") setTimeout(refreshTxsRef.current, 300);
-    // Any buyer (P3's agent or someone's own assistant) announces its wallet when it starts.
-    if (e.type === "mission_started" && typeof e.payload.wallet === "string") setBuyerWallet(e.payload.wallet);
-  }, 0);
-
+  // What each recorded sale was: tier, content and agent come from its audit trail (fetched once per sale).
   useEffect(() => {
-    api.getManifest().then((m) => setPublisherWallet(m.payment.pay_to), () => {});
-  }, []);
-
-  // agent.md asks for a 2 second balance poll during an active session.
-  useEffect(() => {
-    void refreshBalances();
-    const t = setInterval(refreshBalances, 2000);
-    return () => clearInterval(t);
-  }, [refreshBalances]);
+    const missing = txs.filter((x) => x.status === "settled" && !(x.offer_id in audits)).slice(0, 20);
+    if (!missing.length) return;
+    let alive = true;
+    Promise.all(missing.map((x) => api.getAudit(x.offer_id).then((a) => [x.offer_id, a] as const, () => [x.offer_id, null] as const))).then(
+      (pairs) => alive && setAudits((prev) => ({ ...prev, ...Object.fromEntries(pairs) })),
+    );
+    return () => {
+      alive = false;
+    };
+  }, [txs, audits]);
 
   useEffect(() => {
     const t = setInterval(() => setNow(Date.now()), 2000);
@@ -279,7 +299,29 @@ export default function LiveView() {
   const latest = visible.at(-1) ?? null;
   const visits = useMemo(() => groupVisits(visible), [visible]);
   const payments = useMemo(() => paymentsOf(txs, visible, now), [txs, visible, now]);
-  const totalPaid = payments.filter((p) => p.state === "confirmed").reduce((s, p) => s + p.amount, 0);
+
+  // Earlier purchases: recorded sales that are not already told by a live visit above.
+  const sales = useMemo<Sale[]>(() => {
+    const live = new Set(visible.filter((e) => e.type === "content_delivered").map((e) => String(e.payload.offer_id ?? "")));
+    return txs
+      .filter((x) => x.status === "settled" && !live.has(x.offer_id))
+      .sort((a, b) => Number(b.ts) - Number(a.ts))
+      .map((tx) => {
+        const a = audits[tx.offer_id];
+        const ids = contentIds(a?.offer?.content_ids);
+        return {
+          tx,
+          what: (ids[0] && titles[ids[0]]) || a?.offer?.scope || "Data purchase",
+          tier: TIER_LABEL[String(a?.offer?.tier ?? "")] ?? "",
+          agent: a?.agent?.wallet_address ?? tx.payer ?? null,
+        };
+      });
+  }, [txs, audits, titles, visible]);
+
+  const today = new Date(now);
+  const todays = txs.filter((x) => x.status === "settled" && sameDay(toDate(x.ts), today));
+  const earnedToday = todays.reduce((s, x) => s + atomicToUsdc(x.amount_atomic), 0);
+
   // Only payments that arrive while the page is open play the coin animation, not the history on load.
   const seen = useRef<Set<string> | null>(null);
   const [fresh, setFresh] = useState<Set<string>>(new Set());
@@ -409,27 +451,29 @@ export default function LiveView() {
               ))}
             </div>
           ) : (
-            <Empty text="No agent yet. Ask your AI assistant to buy some data." />
+            !sales.length && <Empty text="No agent yet. Ask your AI assistant to buy some data." />
           )}
+          {sales.length > 0 && <PastPurchases sales={sales} />}
         </Card>
 
         <Card title="Blockchain" subtitle={`Public record of every payment, ${CHAIN_NAME}`} className="min-h-[62vh]">
           <div className="grid grid-cols-2 gap-2">
-            <BalanceTile label="Buyer" address={buyerWallet} value={balances.buyer} />
-            <BalanceTile label="Publisher" address={publisherWallet} value={balances.publisher} />
+            <CounterTile label="Your wallet" value={walletBalance} unit="USDC" right={publisherWallet ? <AddressLink address={publisherWallet} /> : null} />
+            <CounterTile label="Earned today" value={txs.length ? earnedToday : null} unit="USDC" right={<span>{todays.length} sale{todays.length === 1 ? "" : "s"} today</span>} accent />
           </div>
           <div className="mb-2 mt-5 flex items-baseline justify-between text-xs">
             <span className="font-medium uppercase tracking-wide text-muted">Payment history</span>
             <span className="tabular-nums text-muted">
-              {payments.filter((p) => p.state === "confirmed").length} received · {totalPaid.toFixed(2)} USDC
+              {payments.filter((p) => p.state === "confirmed").length} received ·{" "}
+              {payments
+                .filter((p) => p.state === "confirmed")
+                .reduce((s, p) => s + p.amount, 0)
+                .toFixed(2)}{" "}
+              USDC
             </span>
           </div>
           <div className="space-y-2">
-            {payments.length ? (
-              payments.map((p) => <PaymentCard key={p.key} payment={p} publisher={publisherWallet} fresh={fresh.has(p.key)} />)
-            ) : (
-              <Empty text="No payment yet." />
-            )}
+            {payments.length ? payments.map((p) => <PaymentCard key={p.key} payment={p} fresh={fresh.has(p.key)} />) : <Empty text="No payment yet." />}
           </div>
         </Card>
       </div>
@@ -443,13 +487,17 @@ function Empty({ text }: { text: string }) {
   return <p className="py-8 text-center text-sm text-muted">{text}</p>;
 }
 
-// ---------------------------------------------------------------- platform column
+// ---------------------------------------------------------------- agents column
 
 function VisitCard({ visit, status, defaultOpen, onSelect }: { visit: Visit; status: Status; defaultOpen: boolean; onSelect: (e: AppEvent) => void }) {
   const [open, setOpen] = useState<boolean | null>(null);
+  const [all, setAll] = useState(false);
   const isOpen = open ?? defaultOpen;
   const last = visit.events.at(-1);
   const who = visit.wallet ? shortHex(visit.wallet) : "Unknown agent";
+  const key = visit.events.filter((e) => KEY_STEPS.has(e.type));
+  // While a visit is running, its latest step is always shown so the card never looks frozen.
+  const shown = all ? visit.events : last && !KEY_STEPS.has(last.type) && status.tone === "live" ? [...key, last] : key;
   return (
     <div className={`animate-fade-in overflow-hidden rounded-xl border transition-colors ${isOpen ? "border-border bg-background/60" : "border-border bg-surface"}`}>
       <button onClick={() => setOpen(!isOpen)} className="flex w-full items-center gap-3 px-3.5 py-3 text-left hover:bg-surface-2/60">
@@ -463,11 +511,7 @@ function VisitCard({ visit, status, defaultOpen, onSelect }: { visit: Visit; sta
             {visit.viaAssistant && <span className="rounded-full bg-accent/10 px-1.5 py-px text-[10px] font-medium text-accent">AI assistant</span>}
           </div>
           <div className="truncate text-xs text-muted">
-            {visit.purchases
-              ? `${visit.purchases} purchase${visit.purchases > 1 ? "s" : ""} · ${visit.paid.toFixed(2)} USDC`
-              : last
-                ? labelFor(last.type).title
-                : ""}
+            {visit.purchases ? `${visit.purchases} purchase${visit.purchases > 1 ? "s" : ""} · ${visit.paid.toFixed(2)} USDC` : last ? labelFor(last.type).title : ""}
             {last && <span> · {clock(last.ts)}</span>}
           </div>
         </div>
@@ -475,40 +519,75 @@ function VisitCard({ visit, status, defaultOpen, onSelect }: { visit: Visit; sta
         <span className={`shrink-0 text-muted transition-transform ${isOpen ? "rotate-90" : ""}`}>›</span>
       </button>
       {isOpen && (
-        <ol className="relative border-t border-border px-3.5 py-2">
-          <span className="absolute bottom-4 left-[86px] top-4 w-px bg-border" />
-          {visit.events.map((e, i) => {
-            const l = labelFor(e.type);
-            const t = TONE[l.tone];
-            const hash = findHash(e.payload);
-            return (
-              <li key={e.event_id ?? `${e.ts}${i}`} className="animate-fade-in">
-                <button
-                  onClick={() => onSelect(e)}
-                  title={l.explain || "Technical details"}
-                  className={`grid w-full grid-cols-[60px_16px_1fr] items-start gap-x-2 rounded-md px-1 py-1.5 text-left hover:bg-surface-2 ${t.row}`}
-                >
-                  <span className="pt-px font-mono text-[11px] tabular-nums text-muted">{clock(e.ts)}</span>
-                  <span className="relative grid h-5 place-items-center">
-                    <span className={`size-[7px] rounded-full ring-2 ring-background ${t.dot}`} />
-                  </span>
-                  <span className="min-w-0">
-                    <span className={`block text-[13px] font-medium leading-5 ${t.title}`}>
-                      <span className="mr-1.5 text-xs">{l.icon}</span>
-                      {l.title}
-                    </span>
-                    <span className="line-clamp-2 block text-xs leading-snug text-muted">{shortSummary(e)}</span>
+        <div className="border-t border-border px-3 py-1.5">
+          <ol>
+            {shown.map((e, i) => {
+              const l = labelFor(e.type);
+              const t = TONE[l.tone];
+              const hash = findHash(e.payload);
+              const detail = all ? shortSummary(e) : stepDetail(e);
+              return (
+                <li key={e.event_id ?? `${e.ts}${i}`} className="animate-fade-in">
+                  <button
+                    onClick={() => onSelect(e)}
+                    title={l.explain || "Technical details"}
+                    className={`flex w-full items-center gap-2.5 rounded-md px-1.5 py-1 text-left text-[13px] hover:bg-surface-2 ${t.row}`}
+                  >
+                    <span className="w-[58px] shrink-0 font-mono text-[11px] tabular-nums text-muted">{clock(e.ts)}</span>
+                    <span className={`size-[7px] shrink-0 rounded-full ${t.dot}`} />
+                    <span className={`shrink-0 font-medium ${t.title}`}>{l.title}</span>
+                    {detail && <span className="min-w-0 truncate text-xs text-muted">{detail}</span>}
                     {hash && (
-                      <span className="mt-0.5 block text-xs" onClick={(ev) => ev.stopPropagation()}>
+                      <span className="ml-auto shrink-0 text-xs" onClick={(ev) => ev.stopPropagation()}>
                         <TxLink hash={hash} />
                       </span>
                     )}
-                  </span>
-                </button>
-              </li>
-            );
-          })}
-        </ol>
+                  </button>
+                </li>
+              );
+            })}
+          </ol>
+          {visit.events.length > key.length && (
+            <button onClick={() => setAll(!all)} className="mb-1 mt-0.5 px-1.5 text-xs text-accent hover:underline">
+              {all ? "Show key steps only" : `Show all ${visit.events.length} steps`}
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function PastPurchases({ sales }: { sales: Sale[] }) {
+  const [more, setMore] = useState(false);
+  const list = more ? sales : sales.slice(0, 6);
+  return (
+    <div className="mt-5">
+      <div className="mb-1.5 flex items-baseline justify-between text-xs">
+        <span className="font-medium uppercase tracking-wide text-muted">Earlier purchases</span>
+        <span className="tabular-nums text-muted">
+          {sales.length} · {sales.reduce((s, x) => s + atomicToUsdc(x.tx.amount_atomic), 0).toFixed(2)} USDC
+        </span>
+      </div>
+      <ul className="divide-y divide-border rounded-xl border border-border bg-surface">
+        {list.map((s) => (
+          <li key={s.tx.tx_id} className="flex items-center gap-3 px-3.5 py-2.5">
+            <span className="grid size-7 shrink-0 place-items-center rounded-full bg-surface-2 text-xs">🤖</span>
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-[13px] font-medium">{s.what}</div>
+              <div className="truncate text-xs text-muted">
+                {s.tier && <span>{s.tier} · </span>}
+                {s.agent && <span className="font-mono">{shortHex(s.agent)}</span>} · {when(toDate(s.tx.ts))}
+              </div>
+            </div>
+            <span className="shrink-0 font-mono text-sm font-semibold tabular-nums text-ok">+{atomicToUsdc(s.tx.amount_atomic).toFixed(2)}</span>
+          </li>
+        ))}
+      </ul>
+      {sales.length > 6 && (
+        <button onClick={() => setMore(!more)} className="mt-1.5 px-1 text-xs text-accent hover:underline">
+          {more ? "Show fewer" : `Show all ${sales.length}`}
+        </button>
       )}
     </div>
   );
@@ -516,7 +595,7 @@ function VisitCard({ visit, status, defaultOpen, onSelect }: { visit: Visit; sta
 
 // ---------------------------------------------------------------- blockchain column
 
-function useTween(value: number | null, ms = 700): number | null {
+function useTween(value: number | null, ms = 800): number | null {
   const [shown, setShown] = useState(value);
   const from = useRef(value);
   useEffect(() => {
@@ -536,7 +615,7 @@ function useTween(value: number | null, ms = 700): number | null {
   return shown;
 }
 
-function BalanceTile({ label, address, value }: { label: string; address: string | null; value: number | null }) {
+function CounterTile({ label, value, unit, right, accent }: { label: string; value: number | null; unit: string; right?: React.ReactNode; accent?: boolean }) {
   const shown = useTween(value);
   const [delta, setDelta] = useState<{ amount: number; at: number } | null>(null);
   const prev = useRef(value);
@@ -555,17 +634,15 @@ function BalanceTile({ label, address, value }: { label: string; address: string
   return (
     <div
       className={`relative rounded-xl border px-3 py-2.5 transition-colors duration-500 ${
-        delta ? (up ? "border-ok/50 bg-ok/5" : "border-border bg-surface-2/60") : "border-border bg-background"
+        up ? "border-ok/50 bg-ok/5" : accent ? "border-ok/20 bg-ok/[0.03]" : "border-border bg-background"
       }`}
     >
-      <div className="flex items-center justify-between gap-2 text-[11px] text-muted">
-        {label}
-        {address && <AddressLink address={address} />}
-      </div>
-      <div className="mt-0.5 font-mono text-xl font-semibold tabular-nums">
+      <div className="text-[11px] text-muted">{label}</div>
+      <div className={`mt-0.5 font-mono text-xl font-semibold tabular-nums ${accent ? "text-ok" : ""}`}>
         {shown === null ? "—" : shown.toFixed(2)}
-        <span className="ml-1 text-xs font-normal text-muted">USDC</span>
+        <span className="ml-1 text-xs font-normal text-muted">{unit}</span>
       </div>
+      {right && <div className="mt-0.5 truncate text-[11px] text-muted">{right}</div>}
       {delta && (
         <span key={delta.at} className={`animate-pop absolute right-2.5 top-7 text-xs font-semibold ${up ? "text-ok" : "text-muted"}`}>
           {up ? "+" : "−"}
@@ -576,7 +653,7 @@ function BalanceTile({ label, address, value }: { label: string; address: string
   );
 }
 
-function PaymentCard({ payment: p, publisher, fresh }: { payment: Payment; publisher: string | null; fresh: boolean }) {
+function PaymentCard({ payment: p, fresh }: { payment: Payment; fresh: boolean }) {
   if (p.state === "refused")
     return (
       <div className="animate-fade-in flex items-center gap-3 rounded-xl border border-dashed border-bad/40 px-3.5 py-2.5 text-sm">
@@ -605,7 +682,7 @@ function PaymentCard({ payment: p, publisher, fresh }: { payment: Payment; publi
         )}
       </div>
       <div className="my-2.5 flex items-center gap-2 text-[10px] text-muted">
-        <span className="font-mono">{p.payer ? shortHex(p.payer, 4, 3) : "buyer"}</span>
+        <span>Agent</span>
         <div className="relative h-2.5 flex-1">
           <span className="absolute inset-x-0 top-1/2 h-px -translate-y-1/2 bg-border" />
           <span
@@ -617,10 +694,10 @@ function PaymentCard({ payment: p, publisher, fresh }: { payment: Payment; publi
             <span className="absolute right-0 top-0.5 size-1.5 rounded-full bg-ok/70" />
           )}
         </div>
-        <span className="font-mono">{publisher ? shortHex(publisher, 4, 3) : "publisher"}</span>
+        <span>You</span>
       </div>
       <div className="flex items-center justify-between text-xs text-muted">
-        <span>{clock(p.ts)}</span>
+        <span>{when(new Date(p.ts))}</span>
         {p.hash ? <TxLink hash={p.hash} /> : <span>waiting for the block…</span>}
       </div>
     </div>

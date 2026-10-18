@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { USE_MOCKS } from "@/lib/config";
+import { Logo } from "@/components/Logo";
 
 const links = [
   { href: "/onboarding", label: "Onboarding" },
@@ -15,8 +16,8 @@ export function Nav() {
   return (
     <header className="border-b border-border bg-surface/80 backdrop-blur">
       <div className="mx-auto flex max-w-[1400px] items-center gap-6 px-4 py-3 sm:px-6">
-        <Link href="/" className="font-semibold tracking-tight">
-          FinHack<span className="text-accent">.</span>
+        <Link href="/">
+          <Logo />
         </Link>
         <nav className="flex gap-1 text-sm">
           {links.map((l) => (
