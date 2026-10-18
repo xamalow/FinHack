@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import { useAccount, useConnect, useDisconnect, useSwitchChain } from "wagmi";
 import { CHAIN } from "@/app/providers";
 import { CHAIN_NAME } from "@/lib/config";
-import { Button, Card, shortHex, usdc } from "@/components/ui";
+import Link from "next/link";
+import { Button, Card, shortHex } from "@/components/ui";
 import * as api from "@/lib/api";
 import { DEMO_SITE_URL } from "@/lib/config";
 import { mockRulesText } from "@/lib/mocks";
@@ -12,7 +13,7 @@ import type { CatalogItem, CatalogStatus, Manifest, Tier } from "@/lib/types";
 import { labelFor } from "@/lib/eventLabels";
 import { useEventStream } from "@/lib/useEventStream";
 
-const STEPS = ["Website", "Catalog", "Pricing", "Wallet & activate"];
+const STEPS = ["Website", "Content", "Prices", "Go live"];
 const SCAN_STAGES = ["scan_started", "scan_extracting", "scan_indexing", "scan_ready"];
 
 export default function Onboarding() {
@@ -21,16 +22,21 @@ export default function Onboarding() {
   const [tiers, setTiers] = useState<Tier[] | null>(null);
 
   return (
-    <div className="mx-auto max-w-5xl">
-      <ol className="mb-6 flex flex-wrap gap-2">
+    <div className="mx-auto max-w-3xl">
+      <ol className="mb-8 flex items-center justify-center gap-2 text-sm">
         {STEPS.map((s, i) => (
-          <li key={s}>
+          <li key={s} className="flex items-center gap-2">
+            {i > 0 && <span className="h-px w-6 bg-border" />}
             <button
               onClick={() => i < step && setStep(i)}
-              className={`flex items-center gap-2 rounded-full border px-3 py-1 text-sm ${i === step ? "border-accent text-foreground" : i < step ? "border-ok/40 text-ok" : "border-border text-muted"}`}
+              className={`flex items-center gap-1.5 ${i === step ? "font-semibold text-foreground" : i < step ? "text-ok" : "text-muted"}`}
             >
-              <span className="font-mono text-xs">{i < step ? "✓" : i + 1}</span>
-              {s}
+              <span
+                className={`flex h-6 w-6 items-center justify-center rounded-full text-xs ${i === step ? "bg-accent text-white" : i < step ? "bg-ok text-white" : "bg-surface-2"}`}
+              >
+                {i < step ? "✓" : i + 1}
+              </span>
+              <span className="hidden sm:inline">{s}</span>
             </button>
           </li>
         ))}
@@ -51,6 +57,15 @@ export default function Onboarding() {
   );
 }
 
+function StepTitle({ title, sub }: { title: string; sub: string }) {
+  return (
+    <div className="mb-5 text-center">
+      <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+      <p className="mt-1 text-muted">{sub}</p>
+    </div>
+  );
+}
+
 function ScanStep({ onDone }: { onDone: () => void }) {
   const [url, setUrl] = useState(DEMO_SITE_URL);
   const [scanning, setScanning] = useState(false);
@@ -60,6 +75,7 @@ function ScanStep({ onDone }: { onDone: () => void }) {
   const scanEvents = events.slice(since).filter((e) => SCAN_STAGES.includes(e.type));
   const stage = Math.max(-1, ...scanEvents.map((e) => SCAN_STAGES.indexOf(e.type)));
   const ready = stage === SCAN_STAGES.length - 1;
+  const last = scanEvents.at(-1);
 
   useEffect(() => {
     if (ready) {
@@ -81,58 +97,42 @@ function ScanStep({ onDone }: { onDone: () => void }) {
   };
 
   return (
-    <Card title="Paste your website URL">
-      <div className="flex flex-col gap-3 sm:flex-row">
-        <input
-          value={url}
-          onChange={(e) => setUrl(e.target.value)}
-          className="flex-1 rounded-lg border border-border bg-background px-3 py-2 font-mono text-sm outline-none focus:border-accent"
-          placeholder="https://your-site.com"
-        />
-        <Button onClick={start} disabled={scanning || !url}>
-          {scanning ? "Scanning…" : "Scan site"}
-        </Button>
-      </div>
-      {error && <p className="mt-3 text-sm text-bad">{error}</p>}
-      {scanning && (
-        <div className="mt-6">
-          <div className="h-2 overflow-hidden rounded-full bg-surface-2">
-            <div className="h-full bg-accent transition-all duration-700" style={{ width: `${((stage + 1) / SCAN_STAGES.length) * 100}%` }} />
-          </div>
-          <ul className="mt-4 space-y-2 text-sm">
-            {scanEvents.map((e) => {
-              const l = labelFor(e.type);
-              return (
-                <li key={e.event_id ?? e.ts} className="animate-fade-in flex gap-3">
-                  <span>{l.icon}</span>
-                  <div>
-                    <div className={`font-medium ${e.type === "scan_ready" ? "text-ok" : ""}`}>{l.title}</div>
-                    <div className="text-muted">{e.summary}</div>
-                  </div>
-                </li>
-              );
-            })}
-            {!ready && <li className="animate-pulse text-muted">…</li>}
-          </ul>
+    <>
+      <StepTitle title="Sell your data to AI agents" sub="Paste your website. We find what can be sold." />
+      <Card>
+        <div className="flex flex-col gap-3 sm:flex-row">
+          <input
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            className="flex-1 rounded-lg border border-border bg-background px-3 py-2.5 outline-none focus:border-accent"
+            placeholder="https://your-site.com"
+          />
+          <Button onClick={start} disabled={scanning || !url}>
+            {scanning ? "Scanning…" : "Scan"}
+          </Button>
         </div>
-      )}
-    </Card>
+        {error && <p className="mt-3 text-sm text-bad">{error}</p>}
+        {scanning && (
+          <div className="mt-5">
+            <div className="h-2 overflow-hidden rounded-full bg-surface-2">
+              <div className="h-full bg-accent transition-all duration-700" style={{ width: `${((stage + 1) / SCAN_STAGES.length) * 100}%` }} />
+            </div>
+            <p key={String(last?.event_id)} className={`animate-fade-in mt-3 text-sm ${ready ? "text-ok" : "text-muted"}`}>
+              {last ? `${labelFor(last.type).icon} ${labelFor(last.type).title}` : "Starting…"}
+            </p>
+          </div>
+        )}
+      </Card>
+    </>
   );
 }
 
-const STATUS_OPTIONS: { key: CatalogStatus; icon: string; label: string; help: string; active: string }[] = [
-  { key: "sellable", icon: "💰", label: "For sale", help: "Agents can buy it", active: "border-accent bg-accent text-white" },
-  { key: "free", icon: "👀", label: "Free preview", help: "Agents read it for free", active: "border-ok bg-ok text-white" },
-  { key: "excluded", icon: "🔒", label: "Keep private", help: "Never shown or sold", active: "border-bad bg-bad text-white" },
+const STATUS_OPTIONS: { key: CatalogStatus; label: string; active: string }[] = [
+  { key: "sellable", label: "Sell", active: "bg-accent text-white" },
+  { key: "free", label: "Free", active: "bg-ok text-white" },
+  { key: "excluded", label: "Private", active: "bg-bad text-white" },
 ];
 
-const TIER_LABEL: Record<NonNullable<CatalogItem["suggested_tier"]>, string> = {
-  single_fact: "a single figure",
-  small_table: "a small table",
-  full_section: "the full section",
-};
-
-const humanize = (s: string) => s.replace(/_/g, " ");
 // P1 marks the scanned internal page "internal"; the mock catalog uses "sensitive".
 const isInternal = (c: CatalogItem) => c.sensitivity === "internal" || c.sensitivity === "sensitive";
 
@@ -146,96 +146,71 @@ function CatalogStep({ catalog, setCatalog, onNext }: { catalog: CatalogItem[]; 
       await api.setCatalogStatus(id, status);
     } catch {
       setCatalog(before);
-      setError("This section was flagged as internal, it can only stay private.");
+      setError("Internal pages stay private.");
     }
   };
   const count = (s: CatalogStatus) => catalog.filter((c) => c.status === s).length;
   const reports = Object.values(
     catalog.reduce<Record<string, CatalogItem[]>>((acc, c) => ({ ...acc, [c.report_id]: [...(acc[c.report_id] ?? []), c] }), {}),
   );
-  const riskyForSale = catalog.filter((c) => isInternal(c) && c.status !== "excluded");
 
   return (
-    <div className="space-y-4">
-      <Card>
-        <h2 className="text-lg font-semibold">Here is what we found on your site</h2>
-        <p className="mt-1 text-sm text-muted">
-          {reports.length} documents, split into {catalog.length} sections. For each section, choose what AI agents are allowed to do with it.
-        </p>
-        <div className="mt-4 grid gap-2 sm:grid-cols-3">
-          {STATUS_OPTIONS.map((o) => (
-            <div key={o.key} className="flex items-center gap-3 rounded-lg border border-border bg-background p-3">
-              <span className="text-xl">{o.icon}</span>
-              <div className="flex-1">
-                <div className="text-sm font-semibold">{o.label}</div>
-                <div className="text-xs text-muted">{o.help}</div>
-              </div>
-              <span className="font-mono text-xl font-semibold">{count(o.key)}</span>
-            </div>
-          ))}
-        </div>
-        <p className="mt-3 rounded-lg bg-accent/5 px-3 py-2 text-xs text-muted">
-          🛡️ Agents only see titles and topics. No figure from your documents is ever shown before payment.
-        </p>
-      </Card>
+    <>
+      <StepTitle title="What can agents buy?" sub="Agents only see titles. Never a number before they pay." />
+      <div className="mb-4 flex justify-center gap-4 text-sm">
+        <span>
+          <b>{count("sellable")}</b> <span className="text-muted">for sale</span>
+        </span>
+        <span>
+          <b>{count("free")}</b> <span className="text-muted">free</span>
+        </span>
+        <span>
+          <b>{count("excluded")}</b> <span className="text-muted">private</span>
+        </span>
+      </div>
+      {error && <p className="mb-3 text-center text-sm text-bad">🔒 {error}</p>}
 
-      {error && <div className="animate-fade-in rounded-xl border border-bad/40 bg-bad/10 p-3 text-sm text-bad">🔒 {error}</div>}
-
-      {riskyForSale.length > 0 && (
-        <div className="animate-fade-in rounded-xl border border-warn/50 bg-warn/10 p-4 text-sm">
-          <span className="font-semibold text-warn">⚠️ {riskyForSale.length === 1 ? "One section looks" : `${riskyForSale.length} sections look`} internal.</span>{" "}
-          We recommend keeping {riskyForSale.map((c) => `"${c.title}"`).join(", ")} private.
-        </div>
-      )}
-
-      {reports.map((sections) => (
-        <Card key={sections[0].report_id} title={`📄 ${sections[0].title}`} subtitle={`${sections.length} section${sections.length > 1 ? "s" : ""} · ${sections[0].region} · ${sections[0].period}`}>
-          <div className="divide-y divide-border">
-            {sections.map((c) => (
-              <div key={c.content_id} className="flex flex-col gap-3 py-3 first:pt-0 last:pb-0 md:flex-row md:items-center">
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-medium">{c.section}</span>
-                    {isInternal(c) && <span className="rounded-full bg-warn/15 px-2 py-0.5 text-xs font-medium text-warn">Looks internal</span>}
-                  </div>
-                  <div className="mt-1 flex flex-wrap gap-1.5">
-                    {c.data_types.map((d) => (
-                      <span key={d} className="rounded-full bg-surface-2 px-2 py-0.5 text-xs text-muted">
-                        {humanize(d)}
-                      </span>
+      <div className="space-y-3">
+        {reports.map((sections) => (
+          <Card key={sections[0].report_id}>
+            <div className="mb-2 text-sm font-semibold">📄 {sections[0].title}</div>
+            <div className="divide-y divide-border">
+              {sections.map((c) => (
+                <div key={c.content_id} className="flex items-center gap-3 py-2">
+                  <span className="min-w-0 flex-1 truncate text-sm">
+                    {c.section}
+                    {isInternal(c) && <span className="ml-2 rounded-full bg-warn/15 px-2 py-0.5 text-xs text-warn">internal</span>}
+                  </span>
+                  <div className="inline-flex shrink-0 overflow-hidden rounded-lg border border-border text-xs">
+                    {STATUS_OPTIONS.map((o) => (
+                      <button
+                        key={o.key}
+                        onClick={() => setStatus(c.content_id, o.key)}
+                        className={`px-3 py-1.5 font-medium transition ${c.status === o.key ? o.active : "text-muted hover:bg-surface-2"}`}
+                      >
+                        {o.label}
+                      </button>
                     ))}
                   </div>
-                  <div className="mt-1 text-xs text-muted">
-                    {c.status === "sellable" && `Agents can buy up to ${c.suggested_tier ? TIER_LABEL[c.suggested_tier] : "the full section"} from it.`}
-                    {c.status === "free" && "Agents can read it for free."}
-                    {c.status === "excluded" && "Hidden from agents, never sold."}
-                  </div>
                 </div>
-                <div className="flex shrink-0 gap-1.5">
-                  {STATUS_OPTIONS.map((o) => (
-                    <button
-                      key={o.key}
-                      onClick={() => setStatus(c.content_id, o.key)}
-                      title={o.help}
-                      className={`rounded-lg border px-2.5 py-1.5 text-xs font-medium transition ${c.status === o.key ? o.active : "border-border text-muted hover:bg-surface-2 hover:text-foreground"}`}
-                    >
-                      {o.icon} {o.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            ))}
-          </div>
-        </Card>
-      ))}
+              ))}
+            </div>
+          </Card>
+        ))}
+      </div>
 
-      <div className="flex items-center justify-end gap-3">
-        <span className="text-sm text-muted">Next: set your prices</span>
+      <div className="mt-5 flex justify-end">
         <Button onClick={onNext}>Continue</Button>
       </div>
-    </div>
+    </>
   );
 }
+
+const TIER_NAME: Record<string, string> = {
+  single_fact: "One figure",
+  small_table: "Small table",
+  full_section: "Full section",
+};
 
 function RulesStep({ tiers, setTiers, onNext }: { tiers: Tier[] | null; setTiers: (t: Tier[]) => void; onNext: () => void }) {
   const [text, setText] = useState(mockRulesText);
@@ -260,47 +235,45 @@ function RulesStep({ tiers, setTiers, onNext }: { tiers: Tier[] | null; setTiers
   };
 
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
-      <Card title="Your pricing rules, in plain language">
+    <>
+      <StepTitle title="Set your prices" sub="Write your rules in plain words. We turn them into prices." />
+      <Card>
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
-          rows={9}
+          rows={7}
           className="w-full rounded-lg border border-border bg-background p-3 text-sm outline-none focus:border-accent"
         />
-        <div className="mt-3 flex justify-end">
-          <Button onClick={generate} disabled={loading || !text.trim()}>
-            {loading ? "Generating tiers…" : "Generate tiers"}
-          </Button>
-        </div>
-        {error && <p className="mt-3 text-sm text-bad">{error}</p>}
-      </Card>
-      <Card title="Generated tiers, to confirm">
-        {!tiers ? (
-          <p className="text-sm text-muted">Tiers appear here. Deterministic checks always use this confirmed table, never the raw text.</p>
-        ) : (
-          <>
-            <div className="space-y-2">
-              {tiers.map((t) => (
-                <div key={t.tier} className="animate-fade-in flex items-center gap-4 rounded-lg border border-border bg-background p-3">
-                  <div className="w-24 text-xl font-semibold">{usdc(t.price_usdc).replace(" USDC", "")}</div>
-                  <div className="flex-1">
-                    <div className="font-mono text-sm">{t.tier}</div>
-                    <div className="text-xs text-muted">{t.scope}</div>
-                  </div>
-                  <div className="font-mono text-xs text-muted">/query/{t.route}</div>
-                </div>
-              ))}
-            </div>
-            <div className="mt-4 flex justify-end">
-              <Button variant="ok" onClick={confirm}>
-                Confirm tiers
-              </Button>
-            </div>
-          </>
+        {error && <p className="mt-2 text-sm text-bad">{error}</p>}
+        {!tiers && (
+          <div className="mt-3 flex justify-end">
+            <Button onClick={generate} disabled={loading || !text.trim()}>
+              {loading ? "Reading your rules…" : "Create prices"}
+            </Button>
+          </div>
         )}
       </Card>
-    </div>
+
+      {tiers && (
+        <div className="animate-fade-in mt-4">
+          <div className="grid gap-3 sm:grid-cols-3">
+            {tiers.map((t) => (
+              <div key={t.tier} className="rounded-xl border border-border bg-surface p-4 text-center shadow-sm">
+                <div className="text-3xl font-semibold">${t.price_usdc.toFixed(2)}</div>
+                <div className="mt-1 font-medium">{TIER_NAME[t.tier] ?? t.tier}</div>
+                <div className="mt-1 text-xs text-muted">{t.scope}</div>
+              </div>
+            ))}
+          </div>
+          <div className="mt-5 flex justify-end gap-2">
+            <Button variant="ghost" onClick={generate} disabled={loading}>
+              Redo
+            </Button>
+            <Button onClick={confirm}>Looks good</Button>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
@@ -309,15 +282,16 @@ function ActivateStep() {
   const { connect, connectors, isPending, error: connectError } = useConnect();
   const { disconnect } = useDisconnect();
   const { switchChain } = useSwitchChain();
+  const [manual, setManual] = useState("");
   const [saved, setSaved] = useState<string | null>(null);
   const [result, setResult] = useState<{ gateway: string; manifest: Manifest } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const wrongChain = isConnected && chainId !== CHAIN.id;
 
+  const save = (w: string) => api.setWallet(w).then(() => setSaved(w), (e) => setError(String(e)));
+
   useEffect(() => {
-    if (address && !wrongChain && saved !== address) {
-      api.setWallet(address).then(() => setSaved(address), (e) => setError(String(e)));
-    }
+    if (address && !wrongChain && saved !== address) void save(address);
   }, [address, wrongChain, saved]);
 
   const doActivate = async () => {
@@ -329,56 +303,80 @@ function ActivateStep() {
     }
   };
 
+  if (result) {
+    return (
+      <div className="animate-fade-in text-center">
+        <div className="text-5xl">🎉</div>
+        <h1 className="mt-3 text-2xl font-semibold">Your site is live</h1>
+        <p className="mt-1 text-muted">AI agents can now find and buy your data. You get paid in USDC.</p>
+        <div className="mt-6 flex justify-center gap-3">
+          <Link href="/live" className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-white hover:brightness-110">
+            Watch agents buy
+          </Link>
+          <Link href="/dashboard" className="rounded-lg border border-border px-4 py-2 text-sm font-medium hover:bg-surface-2">
+            Dashboard
+          </Link>
+        </div>
+        <details className="mx-auto mt-8 max-w-xl text-left text-sm">
+          <summary className="cursor-pointer text-center text-muted">Technical details</summary>
+          <pre className="mt-3 max-h-72 overflow-auto rounded-lg bg-surface-2 p-3 font-mono text-xs">{JSON.stringify(result.manifest, null, 2)}</pre>
+        </details>
+      </div>
+    );
+  }
+
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
-      <Card title={`Publisher wallet (${CHAIN_NAME})`}>
-        {!isConnected ? (
-          <>
-            <p className="mb-4 text-sm text-muted">USDC from every sale goes straight to this wallet.</p>
-            <Button onClick={() => connectors[0] && connect({ connector: connectors[0], chainId: CHAIN.id })} disabled={isPending}>
-              {isPending ? "Waiting for MetaMask…" : "Connect MetaMask"}
-            </Button>
-            {connectError && <p className="mt-3 text-sm text-bad">{connectError.message}</p>}
-          </>
-        ) : (
-          <div className="space-y-3 text-sm">
-            <div className="flex items-center gap-3">
-              <span className="text-ok">●</span>
-              <span className="font-mono">{shortHex(address!)}</span>
-              <button onClick={() => disconnect()} className="text-xs text-muted hover:text-foreground">
-                disconnect
-              </button>
+    <>
+      <StepTitle title="Go live" sub="Choose where your money goes, then switch on." />
+      <Card>
+        <div className="space-y-4">
+          <div className="flex items-center gap-3">
+            <span className={`flex h-7 w-7 items-center justify-center rounded-full text-sm ${saved ? "bg-ok text-white" : "bg-surface-2"}`}>{saved ? "✓" : "1"}</span>
+            <div className="flex-1">
+              {saved ? (
+                <span className="text-sm">
+                  Paid to <span className="font-mono">{shortHex(saved)}</span>
+                  {isConnected && (
+                    <button onClick={() => { disconnect(); setSaved(null); }} className="ml-2 text-xs text-muted hover:text-foreground">
+                      change
+                    </button>
+                  )}
+                </span>
+              ) : wrongChain ? (
+                <Button variant="warn" onClick={() => switchChain({ chainId: CHAIN.id })}>
+                  Switch to {CHAIN_NAME}
+                </Button>
+              ) : (
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button onClick={() => connectors[0] && connect({ connector: connectors[0], chainId: CHAIN.id })} disabled={isPending}>
+                    {isPending ? "Check MetaMask…" : "Connect wallet"}
+                  </Button>
+                  <span className="text-xs text-muted">or</span>
+                  <input
+                    value={manual}
+                    onChange={(e) => setManual(e.target.value.trim())}
+                    placeholder="paste an address 0x…"
+                    className="w-56 rounded-lg border border-border bg-background px-2.5 py-1.5 font-mono text-xs outline-none focus:border-accent"
+                  />
+                  {/^0x[0-9a-fA-F]{40}$/.test(manual) && (
+                    <Button variant="ghost" onClick={() => save(manual)}>
+                      Use
+                    </Button>
+                  )}
+                </div>
+              )}
+              {connectError && !saved && <p className="mt-2 text-xs text-bad">{connectError.message}</p>}
             </div>
-            {wrongChain ? (
-              <Button variant="warn" onClick={() => switchChain({ chainId: CHAIN.id })}>
-                Switch to {CHAIN_NAME}
-              </Button>
-            ) : (
-              <p className="text-muted">{saved === address ? "Wallet stored as payTo." : "Saving wallet…"}</p>
-            )}
           </div>
-        )}
-      </Card>
-      <Card title="Activate">
-        {!result ? (
-          <>
-            <p className="mb-4 text-sm text-muted">Generates /.well-known/ai-data.json and turns the paid routes on.</p>
+          <div className="flex items-center gap-3">
+            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-surface-2 text-sm">2</span>
             <Button variant="ok" onClick={doActivate} disabled={!saved}>
-              Activate
+              Go live
             </Button>
-          </>
-        ) : (
-          <div className="animate-fade-in space-y-3">
-            <p className="text-sm text-ok">Live. Your site now sells data to AI agents.</p>
-            <div className="text-sm">
-              <span className="text-muted">Gateway </span>
-              <span className="font-mono">{result.gateway}</span>
-            </div>
-            <pre className="max-h-72 overflow-auto rounded-lg bg-background p-3 font-mono text-xs">{JSON.stringify(result.manifest, null, 2)}</pre>
           </div>
-        )}
+        </div>
         {error && <p className="mt-3 text-sm text-bad">{error}</p>}
       </Card>
-    </div>
+    </>
   );
 }
