@@ -186,6 +186,44 @@ def test_daily_limit_per_report(client, monkeypatch):
     assert "daily limit" in rejected[0]["summary"]
 
 
+def test_unpaid_accepted_offer_is_not_a_purchase(client, monkeypatch):
+    monkeypatch.setattr(config, "DAILY_SECTION_LIMIT", 1)
+    acct = Account.create()
+    h, sid = authed(client, acct)
+    # Accepted earlier but never paid, and its payment window is over.
+    db.insert_offer({"offer_id": "off_unpaid", "session_id": sid, "content_ids": ["rpt_battery_2025#s3"],
+                     "scope": "x", "tier": "full_section", "price_usdc": 2.0, "license": "internal_use_only",
+                     "status": "accepted", "expires_at": db.iso_in(-60)})
+    out = SalesAgentOutput(action="propose_offer", message_to_buyer="Deal.", offer=OFFER_S2)
+    prompts = script_llm(monkeypatch, out)
+    body = client.post("/session/message", headers=h, json={"message": "need the table"}).json()
+    assert body["action"] == "propose_offer"
+    assert "off_unpaid" not in prompts[0] and "rpt_battery_2025#s3" not in prompts[0].split("<PURCHASE_HISTORY>")[1].split("</PURCHASE_HISTORY>")[0]
+
+
+def test_accepted_offer_in_payment_window_holds_a_slot(client, monkeypatch):
+    monkeypatch.setattr(config, "DAILY_SECTION_LIMIT", 1)
+    acct = Account.create()
+    h, sid = authed(client, acct)
+    db.insert_offer({"offer_id": "off_pending", "session_id": sid, "content_ids": ["rpt_battery_2025#s3"],
+                     "scope": "x", "tier": "full_section", "price_usdc": 2.0, "license": "internal_use_only",
+                     "status": "accepted", "expires_at": db.iso_in(300)})
+    out = SalesAgentOutput(action="propose_offer", message_to_buyer="Deal.", offer=OFFER_S2)
+    script_llm(monkeypatch, out, out)
+    body = client.post("/session/message", headers=h, json={"message": "need the table"}).json()
+    assert body["action"] == "refuse"
+
+
+def test_missing_api_key_uses_fallbacks_instead_of_500(client, monkeypatch):
+    monkeypatch.delenv("ANTHROPIC_API_KEY", raising=False)
+    monkeypatch.delenv("ANTHROPIC_AUTH_TOKEN", raising=False)
+    res = client.put("/publisher/rules", json={"raw_text": DEMO_RULES})
+    assert res.status_code == 200
+    acct = Account.create()
+    h, _ = authed(client, acct)
+    assert client.post("/session/message", headers=h, json={"message": "hello"}).json()["action"] == "refuse"
+
+
 def test_llm_outage_returns_safe_refusal(client, monkeypatch):
     acct = Account.create()
     h, _ = authed(client, acct)

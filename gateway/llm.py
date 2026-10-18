@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 from functools import lru_cache
 from typing import TypeVar
 
@@ -27,6 +28,9 @@ def _client() -> anthropic.Anthropic:
 
 def structured_call(system: str, user: str, output_model: type[T], effort: str = "medium") -> T:
     """One request, validated against `output_model`. Raises LLMError on failure."""
+    if not (os.getenv("ANTHROPIC_API_KEY") or os.getenv("ANTHROPIC_AUTH_TOKEN")):
+        # The SDK raises a TypeError here, which callers do not catch and turns into a 500.
+        raise LLMError("ANTHROPIC_API_KEY is not set")
     try:
         response = _client().beta.messages.parse(
             model=config.LLM_MODEL,
