@@ -10,11 +10,9 @@ import * as api from "@/lib/api";
 import { DEMO_SITE_URL } from "@/lib/config";
 import { mockRulesText } from "@/lib/mocks";
 import type { CatalogItem, CatalogStatus, Manifest, Tier } from "@/lib/types";
-import { labelFor } from "@/lib/eventLabels";
 import { useEventStream } from "@/lib/useEventStream";
 
 const STEPS = ["Website", "Content", "Prices", "Go live"];
-const SCAN_STAGES = ["scan_started", "scan_extracting", "scan_indexing", "scan_ready"];
 
 export default function Onboarding() {
   const [step, setStep] = useState(0);
@@ -66,33 +64,89 @@ function StepTitle({ title, sub }: { title: string; sub: string }) {
   );
 }
 
+type ScanState = "pending" | "running" | "done" | "failed";
+
+// The scan, as four steps with live timings. Each step starts with the first event of its stage (P1's crawler
+// emits scan_started, one scan_extracting per document, one scan_indexing per catalog item, then scan_ready).
+const SCAN_STEPS = [
+  { key: "scan_started", name: "Reading your site", detail: "Sitemap and robots.txt, like a search engine" },
+  { key: "scan_extracting", name: "Extracting pages and reports", detail: "Text from every page and PDF" },
+  { key: "scan_indexing", name: "Cutting it into sellable pieces", detail: "Each section gets a topic, a period and a price tier" },
+  { key: "scan_ready", name: "Catalog ready", detail: "Nothing is for sale until you say so" },
+];
+
 function ScanStep({ onDone }: { onDone: () => void }) {
   const [url, setUrl] = useState(DEMO_SITE_URL);
   const [scanning, setScanning] = useState(false);
+  const [startedAt, setStartedAt] = useState<number | null>(null);
+  const [now, setNow] = useState(() => Date.now());
   const [error, setError] = useState<string | null>(null);
   const { events } = useEventStream();
   const [since, setSince] = useState(0);
-  const scanEvents = events.slice(since).filter((e) => SCAN_STAGES.includes(e.type));
-  const stage = Math.max(-1, ...scanEvents.map((e) => SCAN_STAGES.indexOf(e.type)));
-  const ready = stage === SCAN_STAGES.length - 1;
-  const last = scanEvents.at(-1);
+  const scanEvents = events.slice(since).filter((e) => e.actor === "publisher" && e.type.startsWith("scan_"));
+  const firstAt = (type: string) => {
+    const e = scanEvents.find((x) => x.type === type);
+    return e ? Date.parse(e.ts) : null;
+  };
+  const failed = scanEvents.find((e) => e.type === "scan_failed");
+  const ready = scanEvents.find((e) => e.type === "scan_ready");
+  const starts = SCAN_STEPS.map((s, i) => firstAt(s.key) ?? (i === 0 && scanning ? startedAt : null));
+  const extracted = scanEvents.filter((e) => e.type === "scan_extracting" && e.payload.kind);
+  const indexed = scanEvents.filter((e) => e.type === "scan_indexing");
+  const pdfs = extracted.filter((e) => e.payload.kind === "pdf").length;
+  const lastTitle = (list: typeof scanEvents) => String(list.at(-1)?.payload.title ?? list.at(-1)?.summary ?? "");
+
+  const steps = SCAN_STEPS.map((s, i) => {
+    const begin = starts[i];
+    const next = starts.slice(i + 1).find((x) => x !== null) ?? null;
+    let state: ScanState = "pending";
+    if (begin !== null) state = next !== null || (s.key === "scan_ready" && ready) ? "done" : "running";
+    if (failed && state === "running") state = "failed";
+    const end = state === "done" ? (next ?? begin) : null;
+    const secs = begin === null ? null : ((end ?? (failed ? Date.parse(failed.ts) : now)) - begin) / 1000;
+    let note = "";
+    if (s.key === "scan_started" && begin !== null) note = new URL(url).host;
+    if (s.key === "scan_extracting" && extracted.length)
+      note = state === "done" ? `${extracted.length} documents, ${pdfs} of them PDF reports` : `${extracted.length} documents · ${lastTitle(extracted)}`;
+    if (s.key === "scan_indexing" && indexed.length)
+      note = state === "done" ? `${indexed.length} sections` : `${indexed.length} sections · ${String(indexed.at(-1)?.summary ?? "").replace(/^Indexed /, "")}`;
+    if (s.key === "scan_ready" && ready)
+      note = `${ready.payload.sellable ?? "?"} for sale · ${ready.payload.free ?? "?"} free · ${ready.payload.excluded ?? "?"} private`;
+    if (state === "failed") note = String(failed?.payload.error ?? failed?.summary ?? "Scan failed");
+    return { ...s, state, secs: s.key === "scan_ready" ? null : secs, note };
+  });
+  const doneCount = steps.filter((s) => s.state === "done").length;
+  const total = startedAt === null ? 0 : (((ready ? Date.parse(ready.ts) : failed ? Date.parse(failed.ts) : now) - startedAt) / 1000);
+
+  useEffect(() => {
+    if (!scanning || ready || failed) return;
+    const t = setInterval(() => setNow(Date.now()), 100);
+    return () => clearInterval(t);
+  }, [scanning, ready, failed]);
 
   useEffect(() => {
     if (ready) {
-      const t = setTimeout(onDone, 900);
+      const t = setTimeout(onDone, 1600);
       return () => clearTimeout(t);
     }
   }, [ready, onDone]);
 
+  useEffect(() => {
+    if (failed) setScanning(false);
+  }, [failed]);
+
   const start = async () => {
     setError(null);
     setSince(events.length);
+    setStartedAt(Date.now());
+    setNow(Date.now());
     setScanning(true);
     try {
       await api.scan(url);
     } catch (e) {
       setError(String(e));
       setScanning(false);
+      setStartedAt(null);
     }
   };
 
@@ -107,19 +161,69 @@ function ScanStep({ onDone }: { onDone: () => void }) {
             className="flex-1 rounded-lg border border-border bg-background px-3 py-2.5 outline-none focus:border-accent"
             placeholder="https://your-site.com"
           />
-          <Button onClick={start} disabled={scanning || !url}>
-            {scanning ? "Scanning…" : "Scan"}
+          <Button onClick={start} disabled={(scanning && !failed) || !url}>
+            {scanning && !failed ? "Scanning…" : failed ? "Scan again" : "Scan"}
           </Button>
         </div>
         {error && <p className="mt-3 text-sm text-bad">{error}</p>}
-        {scanning && (
-          <div className="mt-5">
-            <div className="h-2 overflow-hidden rounded-full bg-surface-2">
-              <div className="h-full bg-accent transition-all duration-700" style={{ width: `${((stage + 1) / SCAN_STAGES.length) * 100}%` }} />
+        {startedAt !== null && (
+          <div className="animate-fade-in mt-6">
+            <div className="mb-3 flex items-baseline justify-between text-[13px]">
+              <span className="text-muted">{ready ? "Scanned" : failed ? "Stopped" : "Scanning your site"}</span>
+              <span className="tabular-nums text-muted">
+                {doneCount} of {steps.length} · {total.toFixed(1)} s
+              </span>
             </div>
-            <p key={String(last?.event_id)} className={`animate-fade-in mt-3 text-sm ${ready ? "text-ok" : "text-muted"}`}>
-              {last ? `${labelFor(last.type).icon} ${labelFor(last.type).title}` : "Starting…"}
-            </p>
+            <div className="mb-4 h-[2px] overflow-hidden rounded-full bg-surface-2">
+              <div
+                className={`h-full transition-[width] duration-500 ease-out ${failed ? "bg-bad" : ready ? "bg-ok" : "bg-accent"}`}
+                style={{ width: `${(doneCount / steps.length) * 100}%` }}
+              />
+            </div>
+            <ol className="space-y-1">
+              {steps.map((s, i) => (
+                <li
+                  key={s.key}
+                  className={`grid min-h-[56px] grid-cols-[28px_1fr] gap-x-1 rounded-lg px-1 py-1.5 transition-[opacity,background-color] duration-200 ${
+                    s.state === "running" ? "bg-surface-2" : ""
+                  } ${s.state === "pending" ? "opacity-45" : ""}`}
+                >
+                  <span className="grid h-6 place-items-center">
+                    {s.state === "done" ? (
+                      <span className="text-sm text-ok">✓</span>
+                    ) : s.state === "running" ? (
+                      <span className="size-1.5 animate-pulse rounded-full bg-accent" />
+                    ) : s.state === "failed" ? (
+                      <span className="text-[15px] text-bad">×</span>
+                    ) : (
+                      <span className="tabular-nums text-sm text-muted">{i + 1}</span>
+                    )}
+                  </span>
+                  <div className="min-w-0 pr-2">
+                    <div className="flex items-baseline justify-between gap-3">
+                      <span className="text-[15px] leading-6">{s.name}</span>
+                      <span className={`shrink-0 tabular-nums text-xs ${s.state === "failed" ? "text-bad" : "text-muted"}`}>
+                        {s.state === "failed"
+                          ? "Stopped"
+                          : s.state === "done" && s.secs !== null
+                            ? `${Math.max(s.secs, 0.1).toFixed(1)} s`
+                            : s.state === "running" && s.secs !== null
+                              ? `${Math.max(s.secs, 0).toFixed(1)} s`
+                              : ""}
+                      </span>
+                    </div>
+                    <div
+                      key={s.note}
+                      className={`animate-fade-in truncate text-[13px] leading-snug ${
+                        s.state === "failed" ? "text-bad" : s.state === "done" && s.key === "scan_ready" ? "text-ok" : s.note ? "text-foreground/70" : "text-muted"
+                      }`}
+                    >
+                      {s.state !== "pending" && s.note ? s.note : s.detail}
+                    </div>
+                  </div>
+                </li>
+              ))}
+            </ol>
           </div>
         )}
       </Card>
