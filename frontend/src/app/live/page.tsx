@@ -255,7 +255,7 @@ export default function LiveView() {
     );
   }, []);
 
-  // agent.md asks for a 2 second balance poll during an active session.
+  // Balances are polled every 2 seconds during an active session.
   useEffect(() => {
     void refreshBalance();
     const t = setInterval(refreshBalance, 2000);

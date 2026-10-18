@@ -1,4 +1,4 @@
-// Plain-language wording for every event type in agent.md section 6.4,
+// Plain-language wording for every event type in shared/events.py,
 // so the jury can follow the live view without knowing the protocol.
 
 export type Phase = "identity" | "negotiation" | "payment" | "delivery";

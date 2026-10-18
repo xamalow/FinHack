@@ -1,4 +1,4 @@
-// Mirrors the shared contracts in agent.md section 6. P2 owns the source of truth
+// Mirrors the shared contracts. P2 owns the source of truth
 // in /shared/schemas.py; keep these in sync when it changes.
 
 export type CatalogStatus = "sellable" | "free" | "excluded";
