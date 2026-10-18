@@ -29,7 +29,9 @@ Shared brief for the 4 builders and their coding agents. Every agent reads this 
 
 **What makes it different.** The price depends on what the agent asks for (one figure, a small table, a full report section). We sell granular pieces of information, not a fixed access to a document.
 
-**Scope for the hackathon.** Everything runs on a simulated publisher website that we control. Real domain integration (DNS proxy, middleware on the publisher's server) is out of scope for now.
+**Scope for the hackathon.** Everything runs on a simulated publisher website that we control (https://velstrand-research.vercel.app). Real domain integration (DNS proxy, middleware on the publisher's server) is out of scope for now.
+
+**What we sell.** PDF report sections, and since the HTML extension (section 7.1) data-rich sections of HTML pages too. The scan also works on other public sites: it sells sections that carry real figures and keeps the rest free. Why an agent pays for data a public page already shows: it buys a licensed, structured and attributed piece of data with a receipt, not access. Content that is only served to paying agents (paywall, removed from the public site) is the next step.
 
 ---
 
@@ -39,7 +41,7 @@ Shared brief for the 4 builders and their coding agents. Every agent reads this 
 We open the simulated research firm website. We switch to our platform and paste its URL. The scan animation runs on real crawler events. The catalog appears and we mark the "Internal notes" page as excluded. We type the pricing rules, the platform turns them into tiers (0.10, 0.50, 2.00 USDC) that we confirm. We connect the publisher's MetaMask wallet and click Activate. The simulated site now shows that it sells data to AI agents.
 
 **0:45 to 2:00, an agent buys.**
-We switch to the live view (three columns). We give the buyer agent a mission and a 5 USDC budget. The jury sees in real time the KYA verification, the conversation with the Sales agent, an offer with no figures in it, then the 402, the signature, the settlement by the facilitator and the transaction hash. Both wallet balances move, read directly from the blockchain. The data arrives. We click the hash and the Base Sepolia explorer shows the transaction.
+We switch to the live view (three columns). A person asks **their own Claude** for the data, through our `finhack-buyer` connector (`/buyer-mcp`), with a 5 USDC budget. Our built-in test agent (Run test agent in the live view) is the backup. The jury sees in real time the KYA verification, the conversation with the Sales agent, an offer with no figures in it, then the 402, the signature, the settlement by the facilitator and the transaction hash. Both wallet balances move, read directly from the blockchain. The data arrives. We click the hash and the Base Sepolia explorer shows the transaction.
 
 **2:00 to 2:30, a second, more expensive sale.**
 The agent asks for a full report section at 2.00 USDC. This is above its approval threshold, so it pauses and asks for human approval. We approve, the payment goes through. The jury sees that the price follows the request.
@@ -135,6 +137,7 @@ Always check the current x402 docs (`docs.x402.org`) for exact field names and p
 /buyer-agent      P3   autonomous buyer agent
 /scripts          P3   create_wallets.py, fund check
 /frontend         P4   Next.js app
+/buyer-mcp        P4   MCP connector: anyone's own Claude becomes a buyer agent (reuses P3 guards)
 /shared           P2   schemas.py, db.py, events.py
 .env.example      P2   variable names only
 agent.md          all  this file
@@ -256,7 +259,10 @@ Agent identity headers on every buyer request: `X-Agent-Id`, `X-Agent-Wallet`. A
 ### 7.1 Publisher onboarding (simulated site)
 
 1. Publisher enters the simulated site URL in the dashboard.
-2. `POST /publisher/scan` reads `sitemap.xml`, respects `robots.txt`, fetches HTML pages and PDFs, extracts text, splits reports into sections.
+2. `POST /publisher/scan` reads `sitemap.xml` (without one, follows same-host links page by page, up to 200 URLs), respects `robots.txt`, fetches HTML pages and PDFs, extracts text, splits reports into sections and HTML pages on their h2/h3 headings.
+   - PDF report sections are sellable.
+   - HTML sections are sellable when they carry real data: at least 3 strong figures (decimals, percentages, amounts, 1,000 and up; years and small counts do not count), at least 2 per 1,000 characters, and not a boilerplate heading (notes, references, "cite this"). The rest of the page becomes one free "Overview" item.
+   - An HTML page that is the summary of a PDF report stays that report's free article. Pages without `<article>`/`<main>` are kept only above 1,500 characters.
 3. An LLM call generates metadata for each section. Raw text goes to `content`, metadata to `catalog`.
 4. Publisher reviews the catalog and marks each item `sellable`, `free` or `excluded` ("Internal notes" is excluded).
 5. Publisher types pricing rules in natural language. An LLM call converts them into the tier table (6.3). The publisher confirms it. All deterministic checks use the confirmed table, never the raw text.
@@ -397,8 +403,8 @@ Each human plugs their coding agent into one role. The agent works only on its r
 
 **Builds**
 1. **Simulated website** in `/site-demo`, deployed on Vercel. A fictional research firm (pick a name and check it is not a real company). Home page, About page, 4 free article pages (summaries), 4 PDF reports (European battery manufacturers market share 2025, lithium costs, gigafactory capacities, one more), one "Internal notes" page. All figures come from a single `truth.json` used to generate the PDFs. Figures are precise and invented (for example 31.4 percent) so any leak is obvious. Footer mentions that AI agents can buy the data. Serves `/.well-known/ai-data.json` once activated.
-2. **Crawler** `/ingestion/crawl.py`. Input a base URL. Reads `sitemap.xml`, respects `robots.txt`, fetches HTML, downloads PDFs, extracts text with PyMuPDF.
-3. **Chunking and catalog** `/ingestion/catalog.py`. Splits reports into sections, one LLM call per section for metadata (6.2), writes `catalog` and `content`. Flags the Internal notes page as sensitive.
+2. **Crawler** `/ingestion/crawl.py`. Input a base URL. Reads `sitemap.xml` or follows links when there is none, respects `robots.txt`, fetches HTML (split on h2/h3), downloads PDFs, extracts text with PyMuPDF.
+3. **Chunking and catalog** `/ingestion/catalog.py`. Splits reports into sections and data-rich HTML pages into sections (rules in 7.1), one LLM call per section for metadata (6.2), writes `catalog` and `content`. Flags the Internal notes page as sensitive.
 4. **Leak filter** `contains_paid_figures(text) -> bool`. Extracts numbers from all paid content, normalizes formats (31,4 and 31.4, percent signs, thousands separators), returns true if the text contains one.
 5. **Endpoints** `POST /publisher/scan`, `GET /publisher/catalog`, `PATCH /publisher/catalog/{content_id}`.
 
@@ -536,6 +542,7 @@ Usage is internal only, no resale, no model training.
 2. **Live view** (main demo screen, 7.4) three columns fed by `GET /events/stream`, each line clickable to show the raw JSON payload, explorer link on every hash, on-chain balances of buyer and publisher, approval button when `approval_requested` arrives, mission and budget inputs with a Run button calling `POST /buyer/run`.
 3. **Publisher dashboard** total requests, paid requests, revenue, average transaction (from `GET /publisher/stats`), transactions table with explorer links, audit view per sale (`GET /audit/{offer_id}`).
 4. **Demo script** the 3 minute run in section 2, with both transactions (0.10 and 2.00) and the security sequence. Record the backup video.
+5. **Buyer connector** `/buyer-mcp`, an MCP server for Claude Desktop and Claude Code (tools `search_data`, `ask_seller`, `buy`, `wallet_status`). Prices come only from real Sales agent offers, and P3's `check_offer` and `check_payment_required` run before any signature. Its events carry `payload.source = "mcp"`.
 
 **Exposes** nothing, P4 is at the end of the chain.
 
@@ -620,7 +627,7 @@ Verify the USDC contract address on Base Sepolia against Circle's official docs 
 - Advanced anti-reconstruction beyond the daily limit per agent
 - Refunds and disputes (mention in the pitch)
 - Platform commission and revenue split (mention in the pitch)
-- Paywalled content behind authentication (our simulated site is public)
+- Paywalled content behind authentication (our simulated site is public). Selling public HTML pages is in scope as licensed data (section 1), serving content only to paying agents is not.
 
 ---
 

@@ -1,6 +1,7 @@
 """Build the catalog from a crawl.
 
-run_scan(url) crawls the site, splits PDF reports into sections, asks an
+run_scan(url) crawls the site, splits PDF reports into sections and data-rich
+HTML pages into sections (on their h2/h3 headings), asks an
 LLM for metadata on each section (one call per section, in parallel),
 flags internal pages, checks that no metadata leaks a paid figure, then
 writes the catalog and content tables. Every step emits an event.
@@ -22,7 +23,7 @@ from pydantic import BaseModel, Field
 from ingestion import store
 from ingestion.compat import log_event
 from ingestion.crawl import crawl
-from ingestion.leak_filter import build_index, find_paid_figures
+from ingestion.leak_filter import NUMBER, _interpretations, _is_trivial, build_index, find_paid_figures
 
 MODEL = os.environ.get("INGESTION_MODEL", "claude-opus-5-5")
 LLM_WORKERS = 8
@@ -33,6 +34,19 @@ INTERNAL_MARKERS = re.compile(
     r"|do not (share|distribute|publish)|client pipeline",
     re.I,
 )
+# An HTML section is sold when it carries real data: enough "strong" figures
+# (decimals, percentages, amounts, 1,000 and up), dense enough in the text,
+# and it is not boilerplate (notes, references, citation blocks).
+DATA_RICH_MIN_FIGURES = 3
+DATA_RICH_MIN_PER_1000_CHARS = 2.0
+BOILERPLATE_HEADINGS = re.compile(
+    r"^(end ?notes?|foot ?notes?|notes|references|sources|citations?|cite this|bibliography|acknowledg"
+    r"|related|further reading|share|comments?|about the author|reuse|licen[cs]e|subscribe|newsletter"
+    r"|media|press|contact|full materials|downloads?|get in touch|follow us)",
+    re.I,
+)
+# Pages without <article>/<main> are only kept when they hold this much text (skips menus and stubs).
+MIN_PAGE_CHARS = 1500
 CORPORATE_PATHS = re.compile(r"/(index\.html?)?$|/(about|contact|legal|privacy|terms|careers)", re.I)
 
 _scan_lock = threading.Lock()
@@ -173,6 +187,45 @@ def _report_id(url):
     return _slug(os.path.splitext(os.path.basename(urlparse(url).path))[0])
 
 
+def _strong_figures(text):
+    """Figures that look like data: 31.4, 18%, $2.5, 17,340. Years, footnote
+    marks and small counts are not."""
+    count = 0
+    for m in NUMBER.finditer(text or ""):
+        token, values = m.group(0), _interpretations(m.group(0))
+        if not values or all(_is_trivial(v) for v in values):
+            continue
+        after, before = text[m.end():m.end() + 2], text[max(0, m.start() - 1):m.start()]
+        if (any(c in token for c in ".,\u202f\u00a0 ") or after.lstrip().startswith("%")
+                or before in "$€£¥" and before or any(float(v) >= 1000 for v in values)):
+            count += 1
+    return count
+
+
+def is_data_rich(heading, text):
+    """True when an HTML section holds real data worth selling."""
+    if BOILERPLATE_HEADINGS.search(heading.strip()):
+        return False
+    figures = _strong_figures(text)
+    return figures >= DATA_RICH_MIN_FIGURES and figures * 1000 / max(len(text), 1) >= DATA_RICH_MIN_PER_1000_CHARS
+
+
+def split_html(doc):
+    """[(section_title, text, sellable)] for a standalone HTML page.
+
+    Data-rich sections are sold one by one. Everything else on the page is
+    joined into one free "Overview" item, so agents can read the context."""
+    sections = doc.sections or [("", doc.text)]
+    rich = [(h or doc.title, t) for h, t in sections if is_data_rich(h, t)]
+    if not rich:
+        return [(doc.title, doc.text, False)]
+    rest = "\n".join(f"{h}\n{t}" if h else t for h, t in sections if not is_data_rich(h, t))
+    out = [(h, t, True) for h, t in rich]
+    if rest.strip():
+        out.append(("Overview", rest, False))
+    return out
+
+
 def _stem(url):
     return os.path.splitext(url.split("?", 1)[0])[0]
 
@@ -196,7 +249,7 @@ def plan_items(result):
             continue
         path = urlparse(doc.url).path
         internal = bool(INTERNAL_MARKERS.search(f"{path} {doc.title}\n{doc.text}"))
-        if not internal and (CORPORATE_PATHS.search(path) or not doc.has_article):
+        if not internal and (CORPORATE_PATHS.search(path) or (not doc.has_article and len(doc.text) < MIN_PAGE_CHARS)):
             continue
         linked = [pdf_by_stem[_stem(link)] for link in doc.content_links if _stem(link) in pdf_by_stem]
         if internal:
@@ -208,9 +261,18 @@ def plan_items(result):
             planned.append(dict(content_id=f"{rid}#article", report_id=rid, title=doc.title, section="Free article",
                                 text=doc.text, kind="article", url=doc.url, internal=False))
         else:
-            rid = "page_" + _slug(os.path.splitext(os.path.basename(path))[0])
-            planned.append(dict(content_id=f"{rid}#s1", report_id=rid, title=doc.title, section=doc.title,
-                                text=doc.text, kind="page", url=doc.url, internal=False))
+            # Full path, so /a/index.html and /b/index.html do not collide.
+            rid = "page_" + _slug(os.path.splitext(path)[0])
+            parts = split_html(doc)
+            if len(parts) == 1 and not parts[0][2]:
+                planned.append(dict(content_id=f"{rid}#s1", report_id=rid, title=doc.title, section=doc.title,
+                                    text=doc.text, kind="page", url=doc.url, internal=False))
+                continue
+            for i, (section, text, sellable) in enumerate(parts, 1):
+                cid = f"{rid}#s{i}" if sellable else f"{rid}#overview"
+                planned.append(dict(content_id=cid, report_id=rid, title=doc.title, section=section,
+                                    text=f"{doc.title}\n{section}\n{text}" if sellable else text,
+                                    kind="page_section" if sellable else "page", url=doc.url, internal=False))
     return planned
 
 
@@ -230,7 +292,7 @@ def finalize_item(p, meta, index):
     internal = p["internal"] or meta.sensitivity == "internal"
     if internal:
         sensitivity, status, tier = "internal", "excluded", None
-    elif p["kind"] == "report_section":
+    elif p["kind"] in ("report_section", "page_section"):
         sensitivity, status, tier = "proprietary", "sellable", meta.suggested_tier
     else:
         sensitivity, status, tier = "public", "free", None
@@ -267,7 +329,7 @@ def run_scan(url):
 
         planned = plan_items(result)
         index = build_index(
-            [p["text"] for p in planned if p["kind"] in ("report_section", "internal_page") or p["internal"]],
+            [p["text"] for p in planned if p["kind"] in ("report_section", "page_section", "internal_page") or p["internal"]],
             [p["text"] for p in planned if p["kind"] in ("article", "page") and not p["internal"]],
         )
 

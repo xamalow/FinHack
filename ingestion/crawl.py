@@ -1,10 +1,12 @@
 """Crawler for a publisher website.
 
 crawl(base_url) reads robots.txt and sitemap.xml, fetches every allowed
-same-host URL, and extracts text from HTML pages and PDF reports.
+same-host URL, and extracts text from HTML pages and PDF reports. Without a
+sitemap it follows same-host links page by page, up to MAX_URLS.
 Everything fetched is untrusted data: it is only parsed, never executed
 or followed as instructions.
 """
+import copy
 import io
 import re
 import unicodedata
@@ -34,6 +36,7 @@ class Document:
     content_links: list = field(default_factory=list)  # same-host links inside the article or main body
     lines: list = field(default_factory=list)   # [(font_size, bold, text)] (PDF only)
     has_article: bool = False      # HTML page with an <article> or <main> body
+    sections: list = field(default_factory=list)  # [(heading, text)] split on h2/h3 (HTML only)
 
 
 @dataclass
@@ -88,6 +91,28 @@ def _sitemap_urls(client, base_url, robots):
     return urls
 
 
+_HEADING = "\u241eH\u241e"  # marker that cannot appear in page text
+
+
+def _html_sections(node):
+    """[(heading, text)] of a page body split on its h2/h3 headings.
+    Text before the first heading comes first with an empty heading."""
+    node = copy.copy(node)
+    for h in node.find_all(["h2", "h3"]):
+        h.replace_with(f"\n{_HEADING}{_clean(h.get_text(' '))}\n")
+    parts = _clean(node.get_text("\n")).split(_HEADING)
+    sections = []
+    for i, part in enumerate(parts):
+        lines = [line.strip() for line in part.splitlines() if line.strip()]
+        if i == 0:
+            heading, body = "", lines
+        else:
+            heading, body = (lines[0], lines[1:]) if lines else ("", [])
+        if body:
+            sections.append((heading, "\n".join(body)))
+    return sections
+
+
 def _parse_html(url, body):
     soup = BeautifulSoup(body, "html.parser")
     for tag in soup(["script", "style", "noscript", "template"]):
@@ -109,8 +134,11 @@ def _parse_html(url, body):
     title = _clean(h1.get_text(" ") if h1 else (soup.title.string if soup.title else url))
     text = _clean((body_tag or soup.body or soup).get_text("\n"))
     text = "\n".join(line.strip() for line in text.splitlines() if line.strip())
+    root = body_tag or soup.body or soup
+    for h1_tag in root.find_all("h1"):
+        h1_tag.decompose()
     return Document(url=url, kind="html", title=title, text=text, links=links, content_links=content_links,
-                    has_article=body_tag is not None)
+                    has_article=body_tag is not None, sections=_html_sections(root))
 
 
 def _parse_pdf(url, body):
@@ -152,8 +180,9 @@ def crawl(base_url, on_document=None):
     with httpx.Client(headers=headers, timeout=TIMEOUT, follow_redirects=True) as client:
         robots = _robots(client, base_url)
         urls = _sitemap_urls(client, base_url, robots)
-        if not urls:
-            # No sitemap: fall back to the links on the home page.
+        follow_links = not urls
+        if follow_links:
+            # No sitemap: start from the home page and follow same-host links.
             urls = [base_url]
         queue, done = list(urls), set()
         while queue and len(done) < MAX_URLS:
@@ -176,8 +205,8 @@ def crawl(base_url, on_document=None):
                 errors.append({"url": url, "error": str(err)[:200]})
                 continue
             docs.append(doc)
-            if url == base_url and len(urls) == 1:
-                queue.extend(link for link in doc.links if link not in done)
+            if follow_links and doc.kind == "html":
+                queue.extend(link for link in doc.links if link not in done and link not in queue)
             if on_document:
                 on_document(doc)
     return CrawlResult(base_url=base_url, documents=docs, blocked_by_robots=blocked, errors=errors)
