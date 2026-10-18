@@ -56,6 +56,8 @@ def test_remote_owner_with_token_allowed(monkeypatch):
 
 
 def test_treasury_lists_wallets_with_onchain_balance(monkeypatch):
+    monkeypatch.setenv("BUYER_PRIVATE_KEY_1", "0x" + "11" * 32)  # works on a machine without a .env
+
     async def fake_balance(address):
         return 12_340_000
     monkeypatch.setattr(buyer_router.balances, "read_balance", fake_balance)
