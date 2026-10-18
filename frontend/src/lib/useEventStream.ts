@@ -6,7 +6,9 @@ import { mockHistory, subscribeMock } from "./mockBus";
 import type { AppEvent } from "./types";
 
 // Subscribes to GET /events/stream (SSE) or to the in-browser mock bus.
-export function useEventStream(onEvent?: (e: AppEvent) => void) {
+// With afterId, the gateway first replays the stored events after that id, so leaving the page and coming
+// back keeps the story on screen. Without it, only new events arrive.
+export function useEventStream(onEvent?: (e: AppEvent) => void, afterId?: number) {
   const [events, setEvents] = useState<AppEvent[]>(() => (USE_MOCKS ? mockHistory() : []));
   const [connected, setConnected] = useState(USE_MOCKS);
 
@@ -18,7 +20,7 @@ export function useEventStream(onEvent?: (e: AppEvent) => void) {
 
     if (USE_MOCKS) return subscribeMock(push);
 
-    const es = new EventSource(`${GATEWAY_URL}/events/stream`);
+    const es = new EventSource(`${GATEWAY_URL}/events/stream${afterId !== undefined ? `?after_id=${afterId}` : ""}`);
     es.onopen = () => setConnected(true);
     es.onerror = () => setConnected(false); // EventSource reconnects by itself
     es.onmessage = (msg) => {

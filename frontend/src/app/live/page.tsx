@@ -41,6 +41,17 @@ function findHash(p: Record<string, unknown>): string | null {
   return typeof h === "string" && /^0x[0-9a-fA-F]{64}$/.test(h) ? h : null;
 }
 
+// The live view keeps everything after the last Clear, across page changes and reloads. The Clear is stored as
+// a time, not an event id, so it still works after the demo database is reset (ids start again at 1).
+const CLEARED_KEY = "finhack.live.clearedAt";
+function readClearedAt(): string {
+  try {
+    return window.localStorage.getItem(CLEARED_KEY) || "";
+  } catch {
+    return "";
+  }
+}
+
 export default function LiveView() {
   const [mission, setMission] = useState(PRESETS[0].mission);
   const [budget, setBudget] = useState(5);
@@ -48,6 +59,7 @@ export default function LiveView() {
   const [error, setError] = useState<string | null>(null);
   const [selected, setSelected] = useState<AppEvent | null>(null);
   const [since, setSince] = useState(0);
+  const [clearedAt, setClearedAt] = useState(() => (typeof window === "undefined" ? "" : readClearedAt()));
   const [publisherWallet, setPublisherWallet] = useState<string | null>(null);
   const [balances, setBalances] = useState<{ buyer: number | null; publisher: number | null }>({ buyer: null, publisher: null });
   const [flash, setFlash] = useState(false);
@@ -85,7 +97,7 @@ export default function LiveView() {
     // Any buyer (P3's agent or someone's own assistant) announces its wallet when it starts.
     if (e.type === "mission_started" && typeof e.payload.wallet === "string") setBuyerWalletRef.current(e.payload.wallet);
     if (e.type === "mission_done" || e.type === "offer_refused_budget") setRunning(false);
-  });
+  }, 0);
 
   useEffect(() => {
     api.getManifest().then((m) => setPublisherWallet(m.payment.pay_to), () => {});
@@ -103,20 +115,35 @@ export default function LiveView() {
   const visible = useMemo(() => {
     let seenRequest = false;
     return events.slice(since).filter((e) => {
+      if (!USE_MOCKS && clearedAt && e.ts <= clearedAt) return false;
       if (e.actor === "publisher") return false;
       if (e.type !== "request_received") return true;
       if (seenRequest) return false;
       seenRequest = true;
       return true;
     });
-  }, [events, since]);
+  }, [events, since, clearedAt]);
 
   const latest = visible.at(-1) ?? null;
 
   const pendingApproval = useMemo(() => {
     const granted = new Set(visible.filter((e) => e.type === "approval_granted").map((e) => approvalOffer(e).offerId));
-    return visible.findLast((e) => e.type === "approval_requested" && !granted.has(approvalOffer(e).offerId)) ?? null;
+    // A replayed request whose run already ended (denied or timed out) is not pending any more.
+    const ended = (e: AppEvent) =>
+      visible.some((x) => x.type === "mission_done" && x.session_id === e.session_id && Number(x.event_id ?? 0) > Number(e.event_id ?? 0));
+    return visible.findLast((e) => e.type === "approval_requested" && !granted.has(approvalOffer(e).offerId) && !ended(e)) ?? null;
   }, [visible]);
+
+  const clear = () => {
+    const last = events.reduce((m, e) => (e.ts > m ? e.ts : m), clearedAt || new Date().toISOString());
+    setSince(events.length);
+    setClearedAt(last);
+    try {
+      window.localStorage.setItem(CLEARED_KEY, last);
+    } catch {
+      // private mode: Clear still works for this visit
+    }
+  };
 
   const run = async () => {
     setError(null);
@@ -168,7 +195,7 @@ export default function LiveView() {
               </button>
             </div>
           </div>
-          <Button variant="ghost" onClick={() => setSince(events.length)}>
+          <Button variant="ghost" onClick={clear}>
             Clear
           </Button>
         </div>
