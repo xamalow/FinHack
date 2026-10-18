@@ -8,6 +8,7 @@ import * as api from "@/lib/api";
 import { DEMO_SITE_URL } from "@/lib/config";
 import { mockRulesText } from "@/lib/mocks";
 import type { CatalogItem, CatalogStatus, Manifest, Tier } from "@/lib/types";
+import { labelFor } from "@/lib/eventLabels";
 import { useEventStream } from "@/lib/useEventStream";
 
 const STEPS = ["Website", "Catalog", "Pricing", "Wallet & activate"];
@@ -97,14 +98,19 @@ function ScanStep({ onDone }: { onDone: () => void }) {
           <div className="h-2 overflow-hidden rounded-full bg-surface-2">
             <div className="h-full bg-accent transition-all duration-700" style={{ width: `${((stage + 1) / SCAN_STAGES.length) * 100}%` }} />
           </div>
-          <ul className="mt-4 space-y-1.5 font-mono text-sm">
-            {scanEvents.map((e) => (
-              <li key={e.event_id ?? e.ts} className="animate-fade-in flex gap-3">
-                <span className={e.type === "scan_ready" ? "text-ok" : "text-accent"}>●</span>
-                <span className="text-muted">{e.type}</span>
-                <span>{e.summary}</span>
-              </li>
-            ))}
+          <ul className="mt-4 space-y-2 text-sm">
+            {scanEvents.map((e) => {
+              const l = labelFor(e.type);
+              return (
+                <li key={e.event_id ?? e.ts} className="animate-fade-in flex gap-3">
+                  <span>{l.icon}</span>
+                  <div>
+                    <div className={`font-medium ${e.type === "scan_ready" ? "text-ok" : ""}`}>{l.title}</div>
+                    <div className="text-muted">{e.summary}</div>
+                  </div>
+                </li>
+              );
+            })}
             {!ready && <li className="animate-pulse text-muted">…</li>}
           </ul>
         </div>
@@ -115,8 +121,8 @@ function ScanStep({ onDone }: { onDone: () => void }) {
 
 const STATUS_STYLE: Record<CatalogStatus, string> = {
   sellable: "bg-accent text-white",
-  free: "bg-ok text-black",
-  excluded: "bg-bad text-black",
+  free: "bg-ok text-white",
+  excluded: "bg-bad text-white",
 };
 
 function CatalogStep({ catalog, setCatalog, onNext }: { catalog: CatalogItem[]; setCatalog: (c: CatalogItem[]) => void; onNext: () => void }) {

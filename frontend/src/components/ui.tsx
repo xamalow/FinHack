@@ -1,11 +1,26 @@
 import { addressUrl, txUrl } from "@/lib/config";
 
-export function Card({ title, children, className = "", right }: { title?: string; children: React.ReactNode; className?: string; right?: React.ReactNode }) {
+export function Card({
+  title,
+  subtitle,
+  children,
+  className = "",
+  right,
+}: {
+  title?: string;
+  subtitle?: string;
+  children: React.ReactNode;
+  className?: string;
+  right?: React.ReactNode;
+}) {
   return (
-    <section className={`rounded-xl border border-border bg-surface ${className}`}>
+    <section className={`rounded-xl border border-border bg-surface shadow-sm ${className}`}>
       {title && (
-        <div className="flex items-center justify-between border-b border-border px-4 py-2.5">
-          <h2 className="text-sm font-medium">{title}</h2>
+        <div className="flex items-center justify-between gap-3 border-b border-border px-4 py-2.5">
+          <div>
+            <h2 className="text-sm font-semibold">{title}</h2>
+            {subtitle && <p className="text-xs text-muted">{subtitle}</p>}
+          </div>
           {right}
         </div>
       )}
@@ -23,8 +38,8 @@ export function Button({
   const styles = {
     primary: "bg-accent text-white hover:brightness-110",
     ghost: "border border-border text-foreground hover:bg-surface-2",
-    ok: "bg-ok text-black hover:brightness-110",
-    warn: "bg-warn text-black hover:brightness-110",
+    ok: "bg-ok text-white hover:brightness-110",
+    warn: "bg-warn text-white hover:brightness-110",
   }[variant];
   return (
     <button
