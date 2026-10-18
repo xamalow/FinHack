@@ -119,77 +119,108 @@ function ScanStep({ onDone }: { onDone: () => void }) {
   );
 }
 
-const STATUS_STYLE: Record<CatalogStatus, string> = {
-  sellable: "bg-accent text-white",
-  free: "bg-ok text-white",
-  excluded: "bg-bad text-white",
+const STATUS_OPTIONS: { key: CatalogStatus; icon: string; label: string; help: string; active: string }[] = [
+  { key: "sellable", icon: "💰", label: "For sale", help: "Agents can buy it", active: "border-accent bg-accent text-white" },
+  { key: "free", icon: "👀", label: "Free preview", help: "Agents read it for free", active: "border-ok bg-ok text-white" },
+  { key: "excluded", icon: "🔒", label: "Keep private", help: "Never shown or sold", active: "border-bad bg-bad text-white" },
+];
+
+const TIER_LABEL: Record<CatalogItem["suggested_tier"], string> = {
+  single_fact: "a single figure",
+  small_table: "a small table",
+  full_section: "the full section",
 };
+
+const humanize = (s: string) => s.replace(/_/g, " ");
 
 function CatalogStep({ catalog, setCatalog, onNext }: { catalog: CatalogItem[]; setCatalog: (c: CatalogItem[]) => void; onNext: () => void }) {
   const setStatus = async (id: string, status: CatalogStatus) => {
     setCatalog(catalog.map((c) => (c.content_id === id ? { ...c, status } : c)));
     await api.setCatalogStatus(id, status);
   };
-  const counts = catalog.reduce<Record<string, number>>((acc, c) => ({ ...acc, [c.status]: (acc[c.status] ?? 0) + 1 }), {});
+  const count = (s: CatalogStatus) => catalog.filter((c) => c.status === s).length;
+  const reports = Object.values(
+    catalog.reduce<Record<string, CatalogItem[]>>((acc, c) => ({ ...acc, [c.report_id]: [...(acc[c.report_id] ?? []), c] }), {}),
+  );
+  const riskyForSale = catalog.filter((c) => c.sensitivity === "sensitive" && c.status !== "excluded");
 
   return (
-    <Card
-      title={`Catalog, ${catalog.length} items`}
-      right={
-        <span className="text-xs text-muted">
-          {counts.sellable ?? 0} sellable · {counts.free ?? 0} free · {counts.excluded ?? 0} excluded
-        </span>
-      }
-    >
-      <p className="mb-4 text-sm text-muted">Metadata only. No figure from your paid content ever appears here.</p>
-      <div className="overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead className="text-left text-xs text-muted">
-            <tr>
-              <th className="pb-2 pr-4 font-normal">Report / section</th>
-              <th className="pb-2 pr-4 font-normal">Topic</th>
-              <th className="pb-2 pr-4 font-normal">Data</th>
-              <th className="pb-2 pr-4 font-normal">Tier</th>
-              <th className="pb-2 font-normal">Status</th>
-            </tr>
-          </thead>
-          <tbody>
-            {catalog.map((c) => (
-              <tr key={c.content_id} className="border-t border-border">
-                <td className="py-2.5 pr-4">
-                  <div>{c.title}</div>
-                  <div className="text-xs text-muted">
-                    {c.section}
-                    {c.sensitivity === "sensitive" && <span className="ml-2 rounded bg-warn/15 px-1.5 text-warn">sensitive</span>}
+    <div className="space-y-4">
+      <Card>
+        <h2 className="text-lg font-semibold">Here is what we found on your site</h2>
+        <p className="mt-1 text-sm text-muted">
+          {reports.length} documents, split into {catalog.length} sections. For each section, choose what AI agents are allowed to do with it.
+        </p>
+        <div className="mt-4 grid gap-2 sm:grid-cols-3">
+          {STATUS_OPTIONS.map((o) => (
+            <div key={o.key} className="flex items-center gap-3 rounded-lg border border-border bg-background p-3">
+              <span className="text-xl">{o.icon}</span>
+              <div className="flex-1">
+                <div className="text-sm font-semibold">{o.label}</div>
+                <div className="text-xs text-muted">{o.help}</div>
+              </div>
+              <span className="font-mono text-xl font-semibold">{count(o.key)}</span>
+            </div>
+          ))}
+        </div>
+        <p className="mt-3 rounded-lg bg-accent/5 px-3 py-2 text-xs text-muted">
+          🛡️ Agents only see titles and topics. No figure from your documents is ever shown before payment.
+        </p>
+      </Card>
+
+      {riskyForSale.length > 0 && (
+        <div className="animate-fade-in rounded-xl border border-warn/50 bg-warn/10 p-4 text-sm">
+          <span className="font-semibold text-warn">⚠️ {riskyForSale.length === 1 ? "One section looks" : `${riskyForSale.length} sections look`} internal.</span>{" "}
+          We recommend keeping {riskyForSale.map((c) => `"${c.title}"`).join(", ")} private.
+        </div>
+      )}
+
+      {reports.map((sections) => (
+        <Card key={sections[0].report_id} title={`📄 ${sections[0].title}`} subtitle={`${sections.length} section${sections.length > 1 ? "s" : ""} · ${sections[0].region} · ${sections[0].period}`}>
+          <div className="divide-y divide-border">
+            {sections.map((c) => (
+              <div key={c.content_id} className="flex flex-col gap-3 py-3 first:pt-0 last:pb-0 md:flex-row md:items-center">
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-medium">{c.section}</span>
+                    {c.sensitivity === "sensitive" && <span className="rounded-full bg-warn/15 px-2 py-0.5 text-xs font-medium text-warn">Looks internal</span>}
                   </div>
-                </td>
-                <td className="pr-4 text-muted">
-                  {c.topic} · {c.region} · {c.period}
-                </td>
-                <td className="pr-4 text-xs text-muted">{c.data_types.join(", ")}</td>
-                <td className="pr-4 font-mono text-xs">{c.suggested_tier}</td>
-                <td>
-                  <div className="inline-flex overflow-hidden rounded-lg border border-border">
-                    {(["sellable", "free", "excluded"] as CatalogStatus[]).map((s) => (
-                      <button
-                        key={s}
-                        onClick={() => setStatus(c.content_id, s)}
-                        className={`px-2.5 py-1 text-xs ${c.status === s ? STATUS_STYLE[s] : "text-muted hover:bg-surface-2"}`}
-                      >
-                        {s}
-                      </button>
+                  <div className="mt-1 flex flex-wrap gap-1.5">
+                    {c.data_types.map((d) => (
+                      <span key={d} className="rounded-full bg-surface-2 px-2 py-0.5 text-xs text-muted">
+                        {humanize(d)}
+                      </span>
                     ))}
                   </div>
-                </td>
-              </tr>
+                  <div className="mt-1 text-xs text-muted">
+                    {c.status === "sellable" && `Agents can buy up to ${TIER_LABEL[c.suggested_tier]} from it.`}
+                    {c.status === "free" && "Agents can read it for free."}
+                    {c.status === "excluded" && "Hidden from agents, never sold."}
+                  </div>
+                </div>
+                <div className="flex shrink-0 gap-1.5">
+                  {STATUS_OPTIONS.map((o) => (
+                    <button
+                      key={o.key}
+                      onClick={() => setStatus(c.content_id, o.key)}
+                      title={o.help}
+                      className={`rounded-lg border px-2.5 py-1.5 text-xs font-medium transition ${c.status === o.key ? o.active : "border-border text-muted hover:bg-surface-2 hover:text-foreground"}`}
+                    >
+                      {o.icon} {o.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
             ))}
-          </tbody>
-        </table>
-      </div>
-      <div className="mt-4 flex justify-end">
+          </div>
+        </Card>
+      ))}
+
+      <div className="flex items-center justify-end gap-3">
+        <span className="text-sm text-muted">Next: set your prices</span>
         <Button onClick={onNext}>Continue</Button>
       </div>
-    </Card>
+    </div>
   );
 }
 
