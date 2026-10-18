@@ -16,7 +16,10 @@ import secrets
 from fastapi import APIRouter, Body, Depends, Header, HTTPException, Request
 from fastapi.responses import JSONResponse
 
+import httpx
+
 from payments import balances, config, deps
+from payments import router as payments_router
 
 _spec = importlib.util.spec_from_file_location("buyer_agent", config.ROOT / "buyer-agent" / "agent.py")
 buyer_agent = importlib.util.module_from_spec(_spec)
@@ -113,13 +116,20 @@ async def buyer_treasury():
 
 @router.post("/buyer/replay-last")
 async def buyer_replay_last(run_id: str | None = Body(None, embed=True)):
-    """Security demo button: replays the last paid request of a run (default: the latest run that paid).
+    """Security demo button: replays the last paid request (of a given run, or the latest on this gateway).
     The gateway answers 409 and logs replay_rejected in the live view."""
-    candidates = [RUNS[run_id]] if run_id in RUNS else [a for a in reversed(RUNS.values()) if a.last_paid_request]
-    if not candidates or candidates[0].last_paid_request is None:
+    if run_id in RUNS and RUNS[run_id].last_paid_request:
+        result = await RUNS[run_id].replay_last_payment()
+        return {"replayed_offer_id": RUNS[run_id].last_paid_request["json"]["offer_id"], **result}
+    # Default: the latest paid request on this gateway, from any buyer (test agent or buyer-mcp connector).
+    last = payments_router.LAST_PAID
+    if last is None:
         return JSONResponse({"error": "no_paid_request_to_replay"}, status_code=404)
-    result = await candidates[0].replay_last_payment()
-    return {"replayed_offer_id": candidates[0].last_paid_request["json"]["offer_id"], **result}
+    async with httpx.AsyncClient(timeout=60) as http:
+        r = await http.post(last["url"], headers=last["headers"], json=last["json"])
+    body = r.json() if r.headers.get("content-type", "").startswith("application/json") else r.text[:200]
+    return {"replayed_offer_id": last["json"]["offer_id"], "status_code": r.status_code, "body": body,
+            "delivered": r.status_code == 200}
 
 
 @router.post("/buyer/approve")

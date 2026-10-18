@@ -29,6 +29,9 @@ router = APIRouter()
 SETTLE_ATTEMPTS = 3
 RATE_LIMIT_PER_MIN = int(os.getenv("QUERY_RATE_LIMIT_PER_MIN", "30"))
 _hits = defaultdict(deque)
+# Last successfully paid request, whoever the buyer is (test agent or a user's own assistant via buyer-mcp),
+# kept in memory only for the replay demo button (POST /buyer/replay-last).
+LAST_PAID = None
 
 
 def rate_limited(key):
@@ -217,6 +220,10 @@ async def paid_query(route, request, offer_id, authorization, payment_signature)
         return await payment_required(request, offer, requirements, sid, settle.error_reason or "Settle failed")
 
     store.mark_settled(tx_id, settle.transaction)
+    global LAST_PAID
+    LAST_PAID = {"url": str(request.url), "json": {"offer_id": offer_id},
+                 "headers": {k: v for k, v in request.headers.items()
+                             if k.lower() in ("authorization", "payment-signature", "x-agent-id", "x-agent-wallet")}}
     return deliver(sid, offer, content, settle, payer, tier_price)
 
 
