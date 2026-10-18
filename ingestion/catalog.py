@@ -41,7 +41,8 @@ DATA_RICH_MIN_FIGURES = 3
 DATA_RICH_MIN_PER_1000_CHARS = 2.0
 BOILERPLATE_HEADINGS = re.compile(
     r"^(end ?notes?|foot ?notes?|notes|references|sources|citations?|cite this|bibliography|acknowledg"
-    r"|related|further reading|share|comments?|about the author|reuse|licen[cs]e|subscribe|newsletter)",
+    r"|related|further reading|share|comments?|about the author|reuse|licen[cs]e|subscribe|newsletter"
+    r"|media|press|contact|full materials|downloads?|get in touch|follow us)",
     re.I,
 )
 # Pages without <article>/<main> are only kept when they hold this much text (skips menus and stubs).

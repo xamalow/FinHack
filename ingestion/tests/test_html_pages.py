@@ -48,6 +48,7 @@ def test_only_data_sections_are_sold():
 def test_essays_and_boilerplate_are_not_data():
     assert not is_data_rich("", _parse_html("https://pub.test/e.html", ESSAY_PAGE.encode()).text)
     assert not is_data_rich("Cite this work", "Revenue 4,512.3 MEUR, 2,180.9 MEUR, 1,402.6 MEUR")
+    assert not is_data_rich("Media enquiries", "Call +44 20 7946 0958 or +44 20 7946 0123, fax 0207 946 0999")
     assert is_data_rich("Prices", "Lithium 12,450 USD/t, cobalt 33,100 USD/t, nickel 16,870 USD/t")
 
 
