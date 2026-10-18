@@ -39,3 +39,20 @@ body {
   to { opacity: 1; transform: none; }
 }
 .animate-fade-in { animation: fade-in 0.3s ease-out; }
+
+/* Live view: a coin travelling from the buyer to the publisher on a payment card. */
+@keyframes travel {
+  from { left: 0; opacity: 0; }
+  12% { opacity: 1; }
+  88% { opacity: 1; }
+  to { left: calc(100% - 10px); opacity: 0; }
+}
+.animate-travel { animation: travel 1.4s ease-in-out 1 both; }
+.animate-travel-loop { animation: travel 1.6s ease-in-out infinite; }
+
+@keyframes pop {
+  0% { transform: scale(0.6); opacity: 0; }
+  60% { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(1); }
+}
+.animate-pop { animation: pop 0.45s ease-out both; }
