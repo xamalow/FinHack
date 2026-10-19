@@ -114,7 +114,7 @@ Security rests on five principles, each enforced in code. The permission tiers, 
 - **The seller never sees what it sells.** The Sales agent works from metadata only. Paid content is loaded once, after settlement, for the buyer who paid.
 - **Money moves before data, only once, and only between screened parties.** The amount is fixed server-side, the payer must be the KYA wallet, both sides are screened against OFAC, `(nonce, offer_id)` is unique, settlement happens on-chain before delivery, and a lost delivery is recovered from the chain.
 - **Configuration and buyer data belong to their owner.** Publisher setup, dashboards with buyer data and buyer controls accept only loopback callers or an owner token.
-- **Everything is visible and provable.** Every step emits an event with secrets masked, chained by SHA-256. Each sale ends with a signed license receipt.
+- **Everything is visible and provable.** Every step emits an event with confidential values masked, chained by SHA-256. Each sale ends with a signed license receipt.
 
 ## Data model and API
 
@@ -184,7 +184,7 @@ NEXT_PUBLIC_GATEWAY_URL=http://localhost:8000 npm run dev   # http://localhost:3
 | `FACILITATOR_URL` | `https://x402.org/facilitator` | `https://facilitator.payai.network` |
 | How | `.env` | `.env.mainnet`, commands prefixed with `scripts/mainnet.sh` |
 
-Sensitive values live in `.env`, a local file that git never commits: `JWT_SECRET` (the key that signs agent session tokens), the Anthropic API key, the owner tokens and optional facilitator API keys. Wallet private keys go to encrypted keystores with the password in the OS keychain (`KEYSTORE_PASSWORD` where there is none). Set `PUBLISHER_OWNER_TOKEN` and `BUYER_OWNER_TOKEN` to manage the gateway from another machine. Without them, setup and dashboards answer only on loopback. Sanctions screening reads `SANCTIONS_RPC_URL` (Ethereum mainnet). To use your own Claude as a buyer, add `buyer-mcp/server.py` to Claude Desktop or Claude Code (see `buyer-mcp/README.md`).
+Confidential values live in `.env`, a local file that git never commits: `JWT_SECRET` (the key that signs agent session tokens), the Anthropic API key, the owner tokens and optional facilitator API keys. Wallet private keys go to encrypted keystores with the password in the OS keychain (`KEYSTORE_PASSWORD` where there is none). Set `PUBLISHER_OWNER_TOKEN` and `BUYER_OWNER_TOKEN` to manage the gateway from another machine. Without them, setup and dashboards answer only on loopback. Sanctions screening reads `SANCTIONS_RPC_URL` (Ethereum mainnet). To use your own Claude as a buyer, add `buyer-mcp/server.py` to Claude Desktop or Claude Code (see `buyer-mcp/README.md`).
 
 ## Testing and execution evidence
 

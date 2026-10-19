@@ -92,17 +92,17 @@ On top of these levels, limits follow the wallet across runs and processes (`Spe
 | Records | Personal data kept forever | Conversations erased after 30 days or on request. Offers, transactions and receipts kept (AML record keeping) | `shared/retention.py` | No |
 | Records | Buyer data exposed | Live view, audit, stats and compliance routes owner-only | `shared/owner.py`, `gateway/routers/events.py` | No |
 
-Across all stages: sensitive values (`JWT_SECRET`, which signs session tokens, the Anthropic API key, owner tokens and wallet private keys) live in `.env`, a local file that git never commits, or in encrypted keystores (`scripts/encrypt_keys.py`, password in the OS keychain). `log_event()` masks payload keys such as `token`, `secret`, `private_key`, `authorization`. The payment signature is never logged. Paid routes are rate-limited to 30 requests per minute per session (per IP before KYA). API responses carry `nosniff`, `X-Frame-Options: DENY`, a `default-src 'none'` CSP and `no-store` on paid content. `pip-audit` reports no known Python vulnerability (18 Oct).
+Across all stages: confidential values (`JWT_SECRET`, which signs session tokens, the Anthropic API key, owner tokens and wallet private keys) live in `.env`, a local file that git never commits, or in encrypted keystores (`scripts/encrypt_keys.py`, password in the OS keychain). `log_event()` masks payload keys such as `token`, `secret`, `private_key`, `authorization`. The payment signature is never logged. Paid routes are rate-limited to 30 requests per minute per session (per IP before KYA). API responses carry `nosniff`, `X-Frame-Options: DENY`, a `default-src 'none'` CSP and `no-store` on paid content. `pip-audit` reports no known Python vulnerability (18 Oct).
 
 ## Known-risk list
 
-18 known risks: 3 open, 5 partly mitigated, 4 mitigated, 6 accepted for the hackathon. The two that matter most before a public deployment are R2 and R3: who may list a site, and who may read its content outside the paid path.
+18 known risks: 2 open, 5 partly mitigated, 4 mitigated, 7 accepted for the hackathon. The one that matters most before a public deployment is R2: anyone could list a site they do not own.
 
 | ID | Risk | Current mitigation | Status |
 | --- | --- | --- | --- |
 | R1 | Publisher setup routes (rules, payout wallet, scan, catalog) could be changed by anyone who reaches the gateway | Owner-only since 18 Oct: loopback or `PUBLISHER_OWNER_TOKEN`, constant-time compare, rotation and expiry. Payout wallet screened | Mitigated |
 | R2 | Domain ownership is not verified at onboarding: someone could list a site they do not own | Demo uses our own simulated site. Planned DNS or file-based ownership check | Open |
-| R3 | Agents are recognised only when they declare themselves. An undeclared bot reads public pages, and the demo's paid PDFs are public files on Vercel | KYA proves who pays, not who is a bot. Planned Web Bot Auth, and PDFs moved out of the public site | Open |
+| R3 | Demo only: the simulated site serves its paid PDFs as public files, so anyone can download them without paying. Agents that do not declare themselves are treated as human visitors | In production, paid content is uploaded or read from a private URL and never published, so a visitor or an undeclared bot only sees what the publisher already gives away. The gateway delivers paid content only after settlement | Accepted |
 | R4 | New wallets are free, so many identities can bypass the 3-sections-per-report daily limit and rebuild a report | Limit now follows the wallet and is re-checked at accept. Every section is still paid at its full tier. Reputation or stake per wallet is future work | Partly mitigated |
 | R5 | Leak filter misses figures written in words, rounded or derived ("about 31%") | By design the Sales agent never sees paid figures. Filter normalises Unicode as a second rail | Mitigated |
 | R6 | Buyer and publisher private keys are hot keys | Encrypted keystores (scrypt, AES-128-CTR) with the password in the OS keychain on P3's machine. `.env.mainnet` and other machines not migrated yet. Production needs a KMS or server wallet | Partly mitigated |
@@ -112,7 +112,7 @@ Across all stages: sensitive values (`JWT_SECRET`, which signs session tokens, t
 | R10 | A buyer LLM is talked into a poor purchase within limits. In the MCP connector, approval relies on the assistant asking its user | 1.00 threshold, 2.50 cap, 25 USDC per day, structuring detection, all in code. `owner_approved` counts only after the connector asked | Partly mitigated |
 | R11 | Approvals, buyer runs and rate-limit counters live in memory, per process | Transactions and the spend ledger are persisted. Acceptable for a single-process demo | Accepted |
 | R12 | Smallest sold unit is a report section, so a 0.10 "one figure" sale delivers several figures | Tier floor stops selling a section below its tier. Atomic fact items planned | Open |
-| R13 | Sessions use one HS256 secret with no revocation. A leaked secret would allow forged sessions | 15-minute tokens bound to agent id and wallet. Warning when `JWT_SECRET` is under 32 characters. A forged session still cannot pay from another wallet | Accepted |
+| R13 | Sessions are signed with one HS256 key (`JWT_SECRET`) with no revocation. A leaked key would allow forged sessions | 15-minute tokens bound to agent id and wallet. Warning when `JWT_SECRET` is under 32 characters. A forged session still cannot pay from another wallet | Accepted |
 | R14 | Sanctions screening covers OFAC only, through a free oracle with no timeliness guarantee. Fail-open on testnet | Fail-closed on mainnet. Local blocklist. Paid screening (KYT, TRM, Elliptic) and EU, UN, UK lists are post-hackathon | Accepted |
 | R15 | Manifest trust is trust on first use: a forged first contact would be pinned | `BUYER_TRUSTED_SIGNERS` pins keys explicitly. Signer published at `/compliance/signer`. DNS-published signer planned | Accepted |
 | R16 | The audit chain lives in the database it protects: tampering is detectable, not prevented | `scripts/anchor_audit.py` writes the head on-chain. Not yet run (needs gas) | Partly mitigated |
@@ -121,7 +121,7 @@ Across all stages: sensitive values (`JWT_SECRET`, which signs session tokens, t
 
 ![Risk matrix: 18 risks by residual likelihood and impact](img/risk-matrix.png)
 
-Likelihood is the team's estimate of the residual risk for a public deployment, after current mitigations. The two high-impact risks still open (R2, R3) sit outside the payment path.
+Likelihood is the team's estimate of the residual risk for a public deployment, after current mitigations. The only high-impact risk still open (R2) sits outside the payment path.
 
 ## Evidence
 
@@ -145,13 +145,13 @@ All 27 payments (25 Base Sepolia, 2 Base mainnet) are listed from the chain's US
 
 ## Hardening roadmap before mainnet
 
-The payment path and the compliance layer are ready for small real amounts, as the mainnet sale shows. What remains is about who may list and read content, and about key custody.
+The payment path and the compliance layer are ready for small real amounts, as the mainnet sale shows. What remains is about who may list a site, and about key custody.
 
 1. Verify domain ownership at onboarding with a DNS record or a file on the site (R2).
-2. Move the paid PDFs out of the public site, keep premium content off public pages, and accept signed bot requests (Web Bot Auth) next to wallet KYA (R3).
+2. Before any public demo, move the paid PDFs out of the demo site, and accept signed bot requests (Web Bot Auth) next to wallet KYA to recognise agents that do not declare themselves (R3).
 3. Run `scripts/encrypt_keys.py` on every machine and on `.env.mainnet`, then move keys to a KMS or server wallet (R6).
 4. Anchor the audit head on-chain on a schedule (R16), and publish the manifest signer in DNS to remove trust on first use (R15).
 5. Add a paid screening provider and the EU, UN and UK lists (R14).
 6. Persist approvals and rate-limit counters in a shared store, and configure a second facilitator (R8, R11).
 7. Sell atomic fact items, and add per-wallet reputation or stake against many-identity reconstruction (R4, R12).
-8. Replace the shared JWT secret with rotating or asymmetric keys (R13), and upgrade wagmi to clear the npm alerts (R17).
+8. Replace the single session-signing key with rotating or asymmetric keys (R13), and upgrade wagmi to clear the npm alerts (R17).
