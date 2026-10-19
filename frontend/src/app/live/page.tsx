@@ -42,7 +42,7 @@ const isNoise = (e: AppEvent) => e.type === "sales_message" && /^Sales agent dra
 
 type Side = "buyer" | "seller" | "center";
 type BubbleTone = "plain" | "ok" | "warn" | "bad" | "pending";
-type Bubble = { key: string; side: Side; tone: BubbleTone; title: string; detail?: string; quote?: string; hash?: string | null; event: AppEvent; coin?: string };
+type Bubble = { key: string; side: Side; tone: BubbleTone; title: string; detail?: string; quote?: string; hash?: string | null; event: AppEvent };
 
 type Thread = {
   key: string;
@@ -200,7 +200,7 @@ function buildThread(key: string, sessionId: string | null, wallet: string | nul
         break;
       case "payment_settled":
         t.amount = usdcIn(e.summary);
-        put({ key: "settled", side: "center", tone: "ok", title: `${t.amount.toFixed(2)} USDC paid · confirmed on-chain`, hash: hashOf(), event: e, coin: t.offerId ?? "" });
+        put({ key: "settled", side: "center", tone: "ok", title: `${t.amount.toFixed(2)} USDC paid · confirmed on-chain`, hash: hashOf(), event: e });
         break;
       case "payment_rejected":
         t.blocked = true;
@@ -264,7 +264,6 @@ function readClearedAt(): string {
 }
 
 type Sale = { tx: Transaction; what: string; tier: string; agent: string | null };
-type Flight = { id: number; from: DOMRect; to: DOMRect };
 
 export default function LiveView() {
   const [error, setError] = useState<string | null>(null);
@@ -278,8 +277,6 @@ export default function LiveView() {
   const [txs, setTxs] = useState<Transaction[]>([]);
   const [audits, setAudits] = useState<Record<string, Audit | null>>({});
   const [titles, setTitles] = useState<Record<string, string>>({});
-  const [flights, setFlights] = useState<Flight[]>([]);
-  const walletRef = useRef<HTMLDivElement>(null);
 
   const refreshBalance = useCallback(async () => {
     if (!publisherWallet) return;
@@ -371,26 +368,6 @@ export default function LiveView() {
   const todays = txs.filter((x) => x.status === "settled" && sameDay(toDate(x.ts), today));
   const earnedToday = todays.reduce((s, x) => s + atomicToUsdc(x.amount_atomic), 0);
 
-  // A payment that lands while the page is open sends a coin from its bubble to "Your wallet".
-  const seen = useRef<Set<string> | null>(null);
-  useEffect(() => {
-    const settled = txs.filter((x) => x.status === "settled");
-    if (seen.current === null) {
-      if (txs.length) seen.current = new Set(settled.map((x) => x.offer_id));
-      return;
-    }
-    const added = settled.filter((x) => !seen.current!.has(x.offer_id));
-    if (!added.length) return;
-    added.forEach((x) => seen.current!.add(x.offer_id));
-    const to = walletRef.current?.getBoundingClientRect();
-    if (!to) return;
-    const next = added.map((x, i) => {
-      const source = document.querySelector(`[data-coin="${x.offer_id}"]`) as HTMLElement | null;
-      const from = source?.getBoundingClientRect() ?? new DOMRect(window.innerWidth / 2, window.innerHeight / 2, 0, 0);
-      return { id: Date.now() + i, from, to };
-    });
-    setFlights((f) => [...f, ...next]);
-  }, [txs]);
 
   const pendingApproval = useMemo(() => {
     const granted = new Set(visible.filter((e) => e.type === "approval_granted").map((e) => approvalOffer(e).offerId));
@@ -473,7 +450,7 @@ export default function LiveView() {
 
       <div className="grid items-stretch gap-3 md:grid-cols-[1fr_200px_200px]">
         <NowBanner latest={latest} outcome={latest && threads[0] && latest.ts <= threads[0].lastTs ? outcome : null} />
-        <div ref={walletRef}>
+        <div>
           <CounterTile label="Your wallet" value={walletBalance} unit="USDC" right={publisherWallet ? <AddressLink address={publisherWallet} /> : null} />
         </div>
         <CounterTile label="Earned today" value={txs.length ? earnedToday : null} unit="USDC" right={<span>{todays.length} sale{todays.length === 1 ? "" : "s"} today</span>} accent />
@@ -509,9 +486,6 @@ export default function LiveView() {
         {sales.length > 0 && <PastPurchases sales={sales} />}
       </Card>
 
-      {flights.map((f) => (
-        <FlyingCoin key={f.id} flight={f} onDone={() => setFlights((all) => all.filter((x) => x.id !== f.id))} />
-      ))}
       {selected && <PayloadDrawer event={selected} onClose={() => setSelected(null)} />}
     </div>
   );
@@ -604,7 +578,6 @@ function BubbleRow({ bubble: b, delay, onSelect }: { bubble: Bubble; delay: numb
     <div className={`flex ${align}`}>
       <button
         onClick={() => onSelect(b.event)}
-        data-coin={b.coin || undefined}
         title={`${labelFor(b.event.type).title} · ${clock(b.event.ts)} · click for the technical details`}
         style={{ animationDelay: `${delay}ms` }}
         className={`${anim} max-w-[68%] px-3.5 py-2 text-left text-sm shadow-sm transition hover:brightness-[0.97] ${corner} ${BUBBLE_STYLE[b.side][b.tone]} ${
@@ -642,36 +615,6 @@ function Typing({ side }: { side: Side }) {
           <span key={i} className={`size-1.5 animate-typing rounded-full ${side === "buyer" ? "bg-muted" : "bg-accent"}`} style={{ animationDelay: `${i * 160}ms` }} />
         ))}
       </div>
-    </div>
-  );
-}
-
-function FlyingCoin({ flight, onDone }: { flight: Flight; onDone: () => void }) {
-  const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const x0 = flight.from.left + flight.from.width / 2 - 14;
-    const y0 = flight.from.top + flight.from.height / 2 - 14;
-    const x1 = flight.to.left + 28;
-    const y1 = flight.to.top + flight.to.height / 2 - 14;
-    const lift = Math.min(y0, y1) - 80;
-    const anim = el.animate(
-      [
-        { transform: `translate(${x0}px, ${y0}px) scale(0.6)`, opacity: 0 },
-        { transform: `translate(${x0}px, ${y0 - 10}px) scale(1.15)`, opacity: 1, offset: 0.15 },
-        { transform: `translate(${(x0 + x1) / 2}px, ${lift}px) scale(1)`, opacity: 1, offset: 0.55 },
-        { transform: `translate(${x1}px, ${y1}px) scale(0.7)`, opacity: 1, offset: 0.92 },
-        { transform: `translate(${x1}px, ${y1}px) scale(0.3)`, opacity: 0 },
-      ],
-      { duration: 1300, easing: "cubic-bezier(0.45, 0, 0.25, 1)" },
-    );
-    anim.onfinish = onDone;
-    return () => anim.cancel();
-  }, [flight, onDone]);
-  return (
-    <div ref={ref} className="pointer-events-none fixed left-0 top-0 z-[60] grid size-7 place-items-center rounded-full bg-gradient-to-br from-amber-300 to-amber-500 text-[11px] font-bold text-amber-900 shadow-lg ring-2 ring-white" style={{ opacity: 0 }}>
-      $
     </div>
   );
 }

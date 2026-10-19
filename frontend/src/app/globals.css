@@ -81,3 +81,26 @@ body {
   30% { transform: translateY(-3px); opacity: 1; }
 }
 .animate-typing { animation: typing 1s ease-in-out infinite; }
+
+/* Live view: the wallet tile when a payment lands. A green pulse, a light sweep, the amount floats up. */
+@keyframes wallet-glow {
+  0% { box-shadow: 0 0 0 0 rgba(5, 150, 105, 0.45); transform: scale(1); }
+  12% { transform: scale(1.025); }
+  30% { transform: scale(1); }
+  100% { box-shadow: 0 0 0 14px rgba(5, 150, 105, 0); }
+}
+.animate-wallet-glow { animation: wallet-glow 1.4s cubic-bezier(0.16, 1, 0.3, 1) both; }
+
+@keyframes wallet-sheen {
+  from { transform: translateX(0); }
+  to { transform: translateX(400%); }
+}
+.animate-wallet-sheen { animation: wallet-sheen 1.2s ease-out 0.15s both; }
+
+@keyframes float-up {
+  0% { opacity: 0; transform: translateY(8px) scale(0.9); }
+  15% { opacity: 1; transform: translateY(0) scale(1.05); }
+  70% { opacity: 1; transform: translateY(-4px) scale(1); }
+  100% { opacity: 0; transform: translateY(-14px); }
+}
+.animate-float-up { animation: float-up 3s ease-out both; }
