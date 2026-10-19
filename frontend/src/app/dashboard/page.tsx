@@ -1,41 +1,16 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { PaymentDays, paymentsOf, useTween } from "@/components/payments";
+import { useEffect, useState } from "react";
+import { useTween, when } from "@/components/payments";
 import { AddressLink, Card, TxLink, atomicToUsdc, toDate, usdc } from "@/components/ui";
 import * as api from "@/lib/api";
-import { CHAIN_NAME } from "@/lib/config";
 import type { Audit, PublisherStats, Transaction } from "@/lib/types";
-import { useEventStream } from "@/lib/useEventStream";
 
 export default function Dashboard() {
   const [stats, setStats] = useState<PublisherStats | null>(null);
   const [txs, setTxs] = useState<Transaction[]>([]);
   const [audit, setAudit] = useState<Audit | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [now, setNow] = useState(() => Date.now());
-  const { events } = useEventStream(undefined, 0);
-  const payments = useMemo(() => paymentsOf(txs, events, now), [txs, events, now]);
-
-  // Payments that arrive while the page is open play the coin animation, not the history on load.
-  const seen = useRef<Set<string> | null>(null);
-  const [fresh, setFresh] = useState<Set<string>>(new Set());
-  useEffect(() => {
-    const keys = payments.map((p) => p.key);
-    if (seen.current === null) {
-      if (txs.length) seen.current = new Set(keys);
-      return;
-    }
-    const added = keys.filter((k) => !seen.current!.has(k));
-    if (!added.length) return;
-    added.forEach((k) => seen.current!.add(k));
-    setFresh((f) => new Set([...f, ...added]));
-  }, [payments, txs.length]);
-
-  useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 2000);
-    return () => clearInterval(t);
-  }, []);
 
   useEffect(() => {
     const load = () =>
@@ -60,84 +35,113 @@ export default function Dashboard() {
     }
   };
 
+  const sales = [...txs].sort((a, b) => Number(b.ts) - Number(a.ts));
+  const conversion = stats && stats.requests ? Math.round((100 * stats.paid_requests) / stats.requests) : null;
+
   return (
-    <div className="space-y-4">
-      {error && <p className="text-sm text-bad">{error}</p>}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        <Stat label="Revenue" value={stats ? usdc(stats.revenue_usdc) : "—"} highlight />
-        <Stat label="Total requests" value={stats ? String(stats.requests) : "—"} />
-        <Stat label="Paid requests" value={stats ? String(stats.paid_requests) : "—"} />
-        <Stat label="Average transaction" value={stats ? usdc(stats.average_usdc) : "—"} />
+    <div className="space-y-5">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="text-xl font-semibold tracking-tight">Dashboard</h1>
+          <p className="text-sm text-muted">Every sale your sales agent made, with its full audit trail.</p>
+        </div>
+        <span className="flex items-center gap-2 rounded-full border border-border bg-surface px-3 py-1 text-xs text-muted">
+          <span className={`size-1.5 rounded-full ${error ? "bg-bad" : "animate-pulse bg-ok"}`} />
+          {error ? "Gateway not reachable" : "Live · refreshed every 5 s"}
+        </span>
+      </div>
+      {error && <p className="rounded-lg bg-bad/10 px-3 py-2 text-sm text-bad">{error}</p>}
+
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <Kpi icon="💰" label="Revenue" value={stats?.revenue_usdc ?? null} unit="USDC" hint="Paid to your wallet, on-chain" accent />
+        <Kpi icon="🧾" label="Sales" value={stats?.paid_requests ?? null} digits={0} hint={stats ? `out of ${stats.requests} requests${conversion !== null ? ` · ${conversion}% paid` : ""}` : ""} />
+        <Kpi icon="⚖️" label="Average sale" value={stats?.average_usdc ?? null} unit="USDC" hint="Price set by what the agent asks for" />
+        <Kpi icon="🤖" label="Agent requests" value={stats?.requests ?? null} digits={0} hint="Every call an agent made to a paid route" />
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-5">
-        <Card title="Transactions" className="lg:col-span-3">
-          {!txs.length ? (
-            <p className="text-sm text-muted">No sale yet.</p>
+      <div className="grid items-start gap-4 lg:grid-cols-[3fr_2fr]">
+        <Card title="Sales" subtitle="Newest first. Click a sale to see its audit trail." right={<span className="text-xs tabular-nums text-muted">{sales.length} sales</span>}>
+          {!sales.length ? (
+            <p className="py-6 text-center text-sm text-muted">No sale yet.</p>
           ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead className="text-left text-xs text-muted">
-                  <tr>
-                    <th className="pb-2 pr-4 font-normal">Time</th>
-                    <th className="pb-2 pr-4 font-normal">Offer</th>
-                    <th className="pb-2 pr-4 font-normal">Payer</th>
-                    <th className="pb-2 pr-4 text-right font-normal">Amount</th>
-                    <th className="pb-2 font-normal">Tx hash</th>
+            <div className="-mx-4 -my-4 max-h-[62vh] overflow-auto">
+              <table className="w-full whitespace-nowrap text-sm">
+                <thead className="sticky top-0 z-10 bg-surface/95 text-left text-[11px] uppercase tracking-wide text-muted backdrop-blur">
+                  <tr className="border-b border-border">
+                    <th className="px-4 py-2.5 font-medium">When</th>
+                    <th className="px-2 py-2.5 font-medium">Buyer</th>
+                    <th className="px-2 py-2.5 text-right font-medium">Amount</th>
+                    <th className="px-4 py-2.5 font-medium">Proof on-chain</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {txs.map((t) => (
-                    <tr
-                      key={t.tx_id}
-                      onClick={() => openAudit(t.offer_id)}
-                      className={`cursor-pointer border-t border-border hover:bg-surface-2 ${audit?.offer.offer_id === t.offer_id ? "bg-surface-2" : ""}`}
-                    >
-                      <td className="py-2.5 pr-4 font-mono text-xs text-muted">{toDate(t.ts).toLocaleTimeString()}</td>
-                      <td className="pr-4 font-mono text-xs">{t.offer_id}</td>
-                      <td className="pr-4" onClick={(e) => e.stopPropagation()}>
-                        <AddressLink address={t.payer} />
-                      </td>
-                      <td className="pr-4 text-right font-mono">{atomicToUsdc(t.amount_atomic).toFixed(2)}</td>
-                      <td onClick={(e) => e.stopPropagation()}>
-                        {t.tx_hash ? <TxLink hash={t.tx_hash} /> : <span className="text-muted">{t.status}</span>}
-                      </td>
-                    </tr>
-                  ))}
+                  {sales.map((t, i) => {
+                    const active = audit?.offer.offer_id === t.offer_id;
+                    return (
+                      <tr
+                        key={t.tx_id}
+                        onClick={() => openAudit(t.offer_id)}
+                        style={{ animationDelay: `${Math.min(i * 25, 400)}ms`, animationFillMode: "both" }}
+                        className={`animate-fade-in cursor-pointer border-b border-border/70 transition-colors last:border-0 ${
+                          active ? "bg-accent/[0.06] shadow-[inset_3px_0_0_var(--accent)]" : "hover:bg-surface-2/70"
+                        }`}
+                      >
+                        <td className="px-4 py-2.5">
+                          <div className="font-medium">{when(toDate(t.ts))}</div>
+                          <div className="font-mono text-[11px] text-muted">{t.offer_id}</div>
+                        </td>
+                        <td className="px-2" onClick={(e) => e.stopPropagation()}>
+                          <AddressLink address={t.payer} />
+                        </td>
+                        <td className="px-2 text-right">
+                          <span className="inline-block rounded-full bg-ok/10 px-2.5 py-0.5 font-mono text-[13px] font-semibold tabular-nums text-ok">
+                            +{atomicToUsdc(t.amount_atomic).toFixed(2)}
+                          </span>
+                        </td>
+                        <td className="px-4 text-xs" onClick={(e) => e.stopPropagation()}>
+                          {t.tx_hash ? <TxLink hash={t.tx_hash} /> : <span className="text-muted">{t.status}</span>}
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>
           )}
-          <p className="mt-3 text-xs text-muted">Click a sale to see its audit trail.</p>
         </Card>
 
-        <Card title="Audit" className="lg:col-span-2">
-          {!audit ? <p className="text-sm text-muted">Select a transaction.</p> : <AuditView audit={audit} />}
+        <Card title="Audit" subtitle={audit ? `Sale ${audit.offer.offer_id}` : "Who bought what, the conversation and the payment"} className="lg:sticky lg:top-4">
+          {!audit ? (
+            <div className="py-10 text-center text-sm text-muted">
+              <div className="mb-2 text-2xl">🔎</div>
+              Select a sale on the left.
+            </div>
+          ) : (
+            <AuditView key={audit.offer.offer_id} audit={audit} />
+          )}
         </Card>
       </div>
-
-      <Card title="Blockchain" subtitle={`Public record of every payment on ${CHAIN_NAME}, grouped by day, with refused replays`} right={<ChainTotal payments={payments} />}>
-        {payments.length ? <PaymentDays payments={payments} fresh={fresh} /> : <p className="text-sm text-muted">No payment yet.</p>}
-      </Card>
     </div>
   );
 }
 
-function ChainTotal({ payments }: { payments: ReturnType<typeof paymentsOf> }) {
-  const confirmed = payments.filter((p) => p.state === "confirmed");
-  const total = useTween(confirmed.reduce((s, p) => s + p.amount, 0));
+function Kpi({ icon, label, value, unit, hint, digits = 2, accent }: { icon: string; label: string; value: number | null; unit?: string; hint?: string; digits?: number; accent?: boolean }) {
+  const shown = useTween(value);
   return (
-    <span className="text-xs tabular-nums text-muted">
-      {confirmed.length} received · <span className="font-mono font-semibold text-ok">{(total ?? 0).toFixed(2)} USDC</span>
-    </span>
-  );
-}
-
-function Stat({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
-  return (
-    <div className="rounded-xl border border-border bg-surface p-4">
-      <div className="text-xs text-muted">{label}</div>
-      <div className={`mt-1 text-2xl font-semibold ${highlight ? "text-ok" : ""}`}>{value}</div>
+    <div
+      className={`animate-fade-in rounded-2xl border p-4 shadow-sm transition-colors ${
+        accent ? "border-ok/25 bg-gradient-to-br from-ok/[0.07] to-surface" : "border-border bg-surface"
+      }`}
+    >
+      <div className="flex items-center gap-2 text-xs text-muted">
+        <span className={`grid size-7 place-items-center rounded-lg text-sm ${accent ? "bg-ok/15" : "bg-surface-2"}`}>{icon}</span>
+        {label}
+      </div>
+      <div className={`mt-3 font-mono text-[26px] font-semibold leading-none tabular-nums ${accent ? "text-ok" : ""}`}>
+        {shown === null ? "—" : shown.toFixed(digits)}
+        {unit && <span className="ml-1.5 font-sans text-xs font-normal text-muted">{unit}</span>}
+      </div>
+      {hint && <div className="mt-2 truncate text-[11px] text-muted">{hint}</div>}
     </div>
   );
 }
@@ -145,37 +149,45 @@ function Stat({ label, value, highlight }: { label: string; value: string; highl
 function AuditView({ audit }: { audit: Audit }) {
   const { offer, agent, messages, transaction } = audit;
   return (
-    <div className="animate-fade-in space-y-4 text-sm">
+    <div className="animate-fade-in space-y-5 text-sm">
       {agent && (
-        <Section title="Agent identity (KYA)">
-          <Row k="Agent" v={<span className="font-mono">{agent.agent_id}</span>} />
+        <Section icon="🪪" title="Buyer identity (KYA)">
+          <Row k="Agent" v={<span className="font-mono text-xs">{agent.agent_id}</span>} />
           <Row k="Wallet" v={<AddressLink address={agent.wallet_address} />} />
-          <Row k="Status" v={<span className="text-ok">{agent.status}</span>} />
+          <Row k="Status" v={<Pill ok>{agent.status}</Pill>} />
         </Section>
       )}
-      <Section title="Offer">
-        <Row k="Offer" v={<span className="font-mono">{offer.offer_id}</span>} />
+      <Section icon="🤝" title="What was sold">
         <Row k="Scope" v={offer.scope} />
-        <Row k="Tier" v={<span className="font-mono">{offer.tier}</span>} />
-        <Row k="Price" v={usdc(offer.price_usdc)} />
+        <Row k="Tier" v={<span className="font-mono text-xs">{offer.tier}</span>} />
+        <Row k="Price" v={<span className="font-semibold">{usdc(offer.price_usdc)}</span>} />
         <Row k="Content" v={<span className="font-mono text-xs">{offer.content_ids.join(", ")}</span>} />
         <Row k="License" v={offer.license} />
       </Section>
-      <Section title="Conversation">
+      <Section icon="💬" title="Conversation">
         <div className="space-y-2">
           {messages.map((m, i) => (
-            <div key={i} className={`rounded-lg p-2.5 ${m.role === "buyer" ? "bg-background" : "bg-accent/10"}`}>
-              <div className="text-[11px] text-muted">{m.role === "buyer" ? "Buyer agent" : "Sales agent"}</div>
-              {m.content}
+            <div key={i} className={`flex ${m.role === "buyer" ? "justify-start" : "justify-end"}`}>
+              <div
+                className={`max-w-[88%] px-3 py-2 text-[13px] leading-snug ${
+                  m.role === "buyer" ? "rounded-2xl rounded-bl-md bg-surface-2" : "rounded-2xl rounded-br-md bg-accent text-white"
+                }`}
+              >
+                <div className={`mb-0.5 text-[10px] font-medium uppercase tracking-wide ${m.role === "buyer" ? "text-muted" : "text-white/70"}`}>
+                  {m.role === "buyer" ? "Buyer's agent" : "Your sales agent"}
+                </div>
+                {m.content}
+              </div>
             </div>
           ))}
+          {!messages.length && <p className="text-xs text-muted">Conversation erased after the retention period. The sale record is kept.</p>}
         </div>
       </Section>
       {transaction && (
-        <Section title="Payment">
-          <Row k="Amount" v={usdc(atomicToUsdc(transaction.amount_atomic))} />
+        <Section icon="⛓️" title="Payment">
+          <Row k="Amount" v={<span className="font-semibold text-ok">{usdc(atomicToUsdc(transaction.amount_atomic))}</span>} />
           <Row k="Pay to" v={<AddressLink address={transaction.pay_to} />} />
-          <Row k="Status" v={<span className="text-ok">{transaction.status}</span>} />
+          <Row k="Status" v={<Pill ok={transaction.status === "settled"}>{transaction.status}</Pill>} />
           {transaction.tx_hash && <Row k="Tx hash" v={<TxLink hash={transaction.tx_hash} />} />}
         </Section>
       )}
@@ -183,11 +195,18 @@ function AuditView({ audit }: { audit: Audit }) {
   );
 }
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function Pill({ ok, children }: { ok?: boolean; children: React.ReactNode }) {
+  return <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${ok ? "bg-ok/10 text-ok" : "bg-surface-2 text-muted"}`}>{children}</span>;
+}
+
+function Section({ icon, title, children }: { icon: string; title: string; children: React.ReactNode }) {
   return (
     <div>
-      <div className="mb-2 text-xs font-medium uppercase tracking-wide text-muted">{title}</div>
-      <div className="space-y-1">{children}</div>
+      <div className="mb-2 flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted">
+        <span>{icon}</span>
+        {title}
+      </div>
+      <div className="space-y-1.5 rounded-xl border border-border bg-background/60 p-3">{children}</div>
     </div>
   );
 }
@@ -195,7 +214,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 function Row({ k, v }: { k: string; v: React.ReactNode }) {
   return (
     <div className="flex gap-3">
-      <span className="w-20 shrink-0 text-muted">{k}</span>
+      <span className="w-16 shrink-0 text-muted">{k}</span>
       <span className="min-w-0 break-words">{v}</span>
     </div>
   );
