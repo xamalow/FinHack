@@ -625,6 +625,19 @@ function ActivateStep() {
 
   const save = (w: string) => api.setWallet(w).then(() => setSaved(w), (e) => setError(String(e)));
 
+  // Cuts the link with MetaMask for real (its "connected sites" permission), not only in this page,
+  // so the next Connect shows the account picker again. The payout wallet already saved is left as is.
+  const disconnectWallet = async () => {
+    try {
+      const eth = (window as unknown as { ethereum?: { request: (a: { method: string; params: unknown[] }) => Promise<unknown> } }).ethereum;
+      await eth?.request({ method: "wallet_revokePermissions", params: [{ eth_accounts: {} }] });
+    } catch {
+      // older MetaMask: the page-side disconnect below still applies
+    }
+    disconnect();
+    setSaved(null);
+  };
+
   useEffect(() => {
     if (address && !wrongChain && saved !== address) void save(address);
   }, [address, wrongChain, saved]);
@@ -672,15 +685,21 @@ function ActivateStep() {
                 <span className="text-sm">
                   Paid to <span className="font-mono">{shortHex(saved)}</span>
                   {isConnected && (
-                    <button onClick={() => { disconnect(); setSaved(null); }} className="ml-2 text-xs text-muted hover:text-foreground">
+                    <button onClick={disconnectWallet} className="ml-2 text-xs text-muted hover:text-foreground">
                       change
                     </button>
                   )}
                 </span>
               ) : wrongChain ? (
-                <Button variant="warn" onClick={() => switchChain({ chainId: CHAIN.id })}>
-                  Switch to {CHAIN_NAME}
-                </Button>
+                <div className="flex flex-wrap items-center gap-3">
+                  <Button variant="warn" onClick={() => switchChain({ chainId: CHAIN.id })}>
+                    Switch to {CHAIN_NAME}
+                  </Button>
+                  <span className="font-mono text-xs text-muted">{address && shortHex(address)}</span>
+                  <button onClick={disconnectWallet} className="text-xs text-muted underline hover:text-foreground">
+                    Disconnect wallet
+                  </button>
+                </div>
               ) : (
                 <div className="flex flex-wrap items-center gap-2">
                   <Button onClick={() => connectors[0] && connect({ connector: connectors[0], chainId: CHAIN.id })} disabled={isPending}>
