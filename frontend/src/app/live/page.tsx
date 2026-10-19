@@ -253,25 +253,11 @@ const STATUS_STYLE: Record<Status["tone"], string> = {
 
 // ---------------------------------------------------------------- page
 
-// The live view keeps everything after the last Clear, across page changes and reloads. The Clear is stored as
-// a time, not an event id, so it still works after the demo database is reset (ids start again at 1).
-const CLEARED_KEY = "finhack.live.clearedAt";
-function readClearedAt(): string {
-  try {
-    return window.localStorage.getItem(CLEARED_KEY) || "";
-  } catch {
-    return "";
-  }
-}
-
 type Sale = { tx: Transaction; what: string; tier: string; agent: string | null };
 
 export default function LiveView() {
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
   const [selected, setSelected] = useState<AppEvent | null>(null);
-  const [since, setSince] = useState(0);
-  const [clearedAt, setClearedAt] = useState(() => (typeof window === "undefined" ? "" : readClearedAt()));
   const [publisherWallet, setPublisherWallet] = useState<string | null>(null);
   const [walletBalance, setWalletBalance] = useState<number | null>(null);
   const [now, setNow] = useState(() => Date.now());
@@ -336,15 +322,9 @@ export default function LiveView() {
     return () => clearInterval(t);
   }, []);
 
-  useEffect(() => {
-    if (!notice) return;
-    const t = setTimeout(() => setNotice(null), 6000);
-    return () => clearTimeout(t);
-  }, [notice]);
-
   const visible = useMemo(
-    () => events.slice(since).filter((e) => !(!USE_MOCKS && clearedAt && e.ts <= clearedAt) && e.actor !== "publisher"),
-    [events, since, clearedAt],
+    () => events.filter((e) => e.actor !== "publisher"),
+    [events],
   );
   const latest = visible.filter((e) => !isNoise(e) && e.actor !== "buyer" && e.actor !== "chain").at(-1) ?? null;
   const threads = useMemo(
@@ -389,31 +369,6 @@ export default function LiveView() {
     return null;
   }, [threads, now]);
 
-  const clear = () => {
-    const last = events.reduce((m, e) => (e.ts > m ? e.ts : m), clearedAt || new Date().toISOString());
-    setSince(events.length);
-    setClearedAt(last);
-    try {
-      window.localStorage.setItem(CLEARED_KEY, last);
-    } catch {
-      // private mode: Clear still works for this visit
-    }
-  };
-
-  const replay = async () => {
-    setError(null);
-    try {
-      const r = await api.replayLastPayment();
-      setNotice(
-        r.status_code === 409 && !r.delivered
-          ? "Same signed payment sent again: refused (409), nothing delivered, nothing moved on-chain."
-          : `Replay answered ${r.status_code ?? "?"}${r.delivered ? ", data delivered" : ""}.`,
-      );
-    } catch {
-      setError("No payment to replay yet. Make a purchase first.");
-    }
-  };
-
   const approve = async () => {
     if (!pendingApproval) return;
     try {
@@ -440,16 +395,10 @@ export default function LiveView() {
                 ▶ {s.label}
               </Button>
             ))}
-          <Button variant="ghost" className="px-3 py-1.5 text-xs" onClick={replay}>
-            🔁 Replay last payment
-          </Button>
-          <Button variant="ghost" className="px-3 py-1.5 text-xs" onClick={clear}>
-            Clear
-          </Button>
         </div>
       </div>
 
-      {(notice || error) && <p className={`animate-fade-in rounded-lg px-3 py-2 text-sm ${error ? "bg-bad/10 text-bad" : "bg-surface-2"}`}>{error ?? notice}</p>}
+      {error && <p className="animate-fade-in rounded-lg bg-bad/10 px-3 py-2 text-sm text-bad">{error}</p>}
 
       <div className="grid items-stretch gap-3 md:grid-cols-[1fr_200px_200px]">
         <NowBanner latest={latest} outcome={latest && threads[0] && latest.ts <= threads[0].lastTs ? outcome : null} />
