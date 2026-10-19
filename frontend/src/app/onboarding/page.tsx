@@ -618,12 +618,11 @@ function ActivateStep() {
   const { disconnect } = useDisconnect();
   const { switchChain } = useSwitchChain();
   const [manual, setManual] = useState("");
-  const [saved, setSaved] = useState<string | null>(null);
+  const [picked, setPicked] = useState<string | null>(null);
   const [result, setResult] = useState<{ gateway: string; manifest: Manifest } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const wrongChain = isConnected && chainId !== CHAIN.id;
 
-  const save = (w: string) => api.setWallet(w).then(() => setSaved(w), (e) => setError(String(e)));
 
   // Cuts the link with MetaMask for real (its "connected sites" permission), not only in this page,
   // so the next Connect shows the account picker again. The payout wallet already saved is left as is.
@@ -635,16 +634,18 @@ function ActivateStep() {
       // older MetaMask: the page-side disconnect below still applies
     }
     disconnect();
-    setSaved(null);
+    setPicked(null);
   };
 
-  useEffect(() => {
-    if (address && !wrongChain && saved !== address) void save(address);
-  }, [address, wrongChain, saved]);
+  // The wallet to be paid: a pasted address, or the connected one on the right network.
+  // Nothing is written to the gateway before Go live, so connecting a wallet never changes who gets paid.
+  const chosen = picked ?? (address && !wrongChain ? address : null);
 
   const doActivate = async () => {
     setError(null);
     try {
+      if (!chosen) return;
+      await api.setWallet(chosen);
       setResult(await api.activate());
     } catch (e) {
       setError(String(e));
@@ -679,16 +680,14 @@ function ActivateStep() {
       <Card>
         <div className="space-y-4">
           <div className="flex items-center gap-3">
-            <span className={`flex h-7 w-7 items-center justify-center rounded-full text-sm ${saved ? "bg-ok text-white" : "bg-surface-2"}`}>{saved ? "✓" : "1"}</span>
+            <span className={`flex h-7 w-7 items-center justify-center rounded-full text-sm ${chosen ? "bg-ok text-white" : "bg-surface-2"}`}>{chosen ? "✓" : "1"}</span>
             <div className="flex-1">
-              {saved ? (
+              {chosen ? (
                 <span className="text-sm">
-                  Paid to <span className="font-mono">{shortHex(saved)}</span>
-                  {isConnected && (
-                    <button onClick={disconnectWallet} className="ml-2 text-xs text-muted hover:text-foreground">
-                      change
-                    </button>
-                  )}
+                  Will be paid to <span className="font-mono">{shortHex(chosen)}</span>
+                  <button onClick={() => (picked ? setPicked(null) : disconnectWallet())} className="ml-2 text-xs text-muted underline hover:text-foreground">
+                    change
+                  </button>
                 </span>
               ) : wrongChain ? (
                 <div className="flex flex-wrap items-center gap-3">
@@ -713,18 +712,18 @@ function ActivateStep() {
                     className="w-56 rounded-lg border border-border bg-background px-2.5 py-1.5 font-mono text-xs outline-none focus:border-accent"
                   />
                   {/^0x[0-9a-fA-F]{40}$/.test(manual) && (
-                    <Button variant="ghost" onClick={() => save(manual)}>
+                    <Button variant="ghost" onClick={() => setPicked(manual)}>
                       Use
                     </Button>
                   )}
                 </div>
               )}
-              {connectError && !saved && <p className="mt-2 text-xs text-bad">{connectError.message}</p>}
+              {connectError && !chosen && <p className="mt-2 text-xs text-bad">{connectError.message}</p>}
             </div>
           </div>
           <div className="flex items-center gap-3">
             <span className="flex h-7 w-7 items-center justify-center rounded-full bg-surface-2 text-sm">2</span>
-            <Button variant="ok" onClick={doActivate} disabled={!saved}>
+            <Button variant="ok" onClick={doActivate} disabled={!chosen}>
               Go live
             </Button>
           </div>
