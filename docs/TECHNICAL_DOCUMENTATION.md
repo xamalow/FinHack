@@ -1,6 +1,57 @@
+<p class="logo"><img src="img/doubloon-logo.png" alt="Doubloon" width="260"></p>
+
 # Technical Documentation: Doubloon
 
-18 October 2026 · Maximilien Rambaud, Cosme de Ranieri, Aristote Pellissier, Nathanaël Muller
+19 October 2026 · Maximilien Rambaud, Cosme de Ranieri, Aristote Pellissier, Nathanaël Muller · 2026 Shenzhen International FinTech Competition, International Track, Topic F (Agent Wallet)
+
+## In one page
+
+**The problem.** AI agents now do research for people and companies: they compare markets, check prices and write reports. To do this well they need precise data that publishers sell, such as one market-share figure from a research report. Today they have two bad options. They can scrape the pages, so the publisher earns nothing and the data may be wrong or unlicensed. Or they can buy a subscription built for humans, with an account, a card and a whole report, which an agent cannot do on its own. Nothing lets an agent buy just one figure, pay for it by itself within limits set by its owner, and prove it was allowed to.
+
+**What Doubloon does.** A publisher pastes its website address. Doubloon reads the site, builds a catalog of what can be sold without ever exposing a figure, and turns prices written in plain words into enforced rules. It then puts an AI **sales agent** in front of the content. On the other side, an AI **buyer agent** holds its own wallet of USDC, a dollar stablecoin, under limits set by its owner. It finds the offer, proves who it is, negotiates, pays on the Base blockchain and receives exactly the piece it paid for. The price follows what is asked: 0.10 USDC for one figure, 0.50 for a small table, 2.00 for a full report section.
+
+**Why it fits Topic F (Agent Wallet).** Both sides are AI agents acting as financial participants. The buyer agent's wallet spends on its own up to 1.00 USDC per purchase, asks its human above that, and never signs a payment that does not match the offer. The publisher is paid on-chain, in seconds, before anything is delivered.
+
+**A sale in six steps.**
+
+1. **Discover.** The buyer agent reads the publisher's signed manifest (`/.well-known/ai-data.json`): what is for sale, under which license, and where to pay. It checks the publisher's signature.
+2. **Identify (KYA, Know Your Agent).** It signs a one-time code with its wallet. The gateway checks the signature and screens the wallet against the US sanctions list.
+3. **Negotiate.** It says what it needs. The sales agent, a language model that only sees titles and never the figures, proposes an offer. Code then checks the price, the tier and that no paid figure leaks.
+4. **Decide.** Code checks the buyer's budget, per-purchase cap and daily limits. Above 1.00 USDC, the owner must say yes.
+5. **Pay (x402).** The gateway answers "402 Payment Required" with the exact invoice. The buyer signs a USDC transfer (EIP-3009), and a facilitator settles it on Base, paying the gas.
+6. **Deliver.** Only after settlement, the buyer receives the data with its license. The data carries a mark that identifies the buyer, and comes with a license receipt signed by the publisher. Every step is logged in an audit trail chained by SHA-256 and shown live to the publisher.
+
+**What runs today.**
+
+- **Real payments.** 64 payments: 62 on Base Sepolia with test USDC, and 2 on Base mainnet with real USDC.
+- **Tests.** 160 automated tests.
+- **Live demo.** Someone's own Claude buys from the publisher through our MCP connector, while the publisher watches each purchase as a conversation between the two agents.
+
+**How this document is organised.**
+
+- Overview
+- System architecture
+- Core algorithms, one per step above
+- Security design
+- Data model and API
+- Deployment
+- Testing and execution evidence
+- Limitations
+
+The permission tiers, threat model and known-risk list are in the companion *Security Self-Assessment Report*.
+
+**Terms used.**
+
+| Term | Meaning |
+| --- | --- |
+| USDC | A dollar stablecoin |
+| Base, Base Sepolia | A low-fee blockchain (Ethereum layer 2) and its test network |
+| x402 | Payments carried by the HTTP 402 status code |
+| EIP-3009 | A signed USDC transfer that someone else can submit |
+| Facilitator | The service that verifies and submits that transfer |
+| KYA | Proof of wallet ownership by signature |
+| MCP | The protocol that connects an AI assistant to our tools |
+| Gateway | Our server that sits between agents and the publisher's content |
 
 ## Overview
 
@@ -10,7 +61,7 @@ Doubloon turns any website into data that AI agents can discover, negotiate for 
 - **Publisher side.** Paste a URL, review the scanned catalog (sell, free or private), write prices in plain words, connect a wallet, go live. About 60 seconds, no code.
 - **Buyer side.** Read the signed manifest, prove wallet ownership (KYA), negotiate with the Sales agent, pay through x402, receive the data after on-chain settlement with a signed license receipt.
 - **Compliance.** Both sides screen wallets against the OFAC sanctions list, every event goes into a SHA-256 audit chain, and conversations are erased after 30 days while financial records are kept.
-- **What runs today.** The full flow on a simulated publisher, Velstrand Research ([velstrand-research.vercel.app](https://velstrand-research.vercel.app)), with 25 settled payments on Base Sepolia and 2 on Base mainnet in real USDC. A buyer can be our test agent or anyone's own Claude through an MCP connector.
+- **What runs today.** The full flow on a simulated publisher, Velstrand Research ([velstrand-research.vercel.app](https://velstrand-research.vercel.app)), with 62 settled payments on Base Sepolia and 2 on Base mainnet in real USDC. A buyer can be our test agent or anyone's own Claude through an MCP connector.
 
 Repository: [github.com/xamalow/FinHack](https://github.com/xamalow/FinHack). Security details are in the separate [Security Self-Assessment Report](SECURITY_SELF_ASSESSMENT.md).
 
@@ -27,7 +78,7 @@ The buyer reaches the gateway over HTTP with x402 headers. The gateway asks the 
 | P1, publisher data | Simulated site, crawler, catalog, leak filter, scan endpoints | `site-demo/`, `ingestion/` |
 | P2, gateway and Sales agent | App entry point, shared schemas, database and events, discovery, KYA, Sales agent, offers, rules, audit, event stream | `gateway/`, `shared/` |
 | P3, payments, buyer and compliance | x402 paid routes, replay protection, receipts, recovery, balances, stats, test buyer agent, MCP connector, wallet scripts. Compliance layer (sanctions, audit chain, signing, watermark, retention, keystores, owner access) | `payments/`, `buyer-agent/`, `buyer-mcp/`, `scripts/`, `shared/` compliance modules |
-| P4, interfaces and demo | Onboarding, live view, dashboard, demo run sheet | `frontend/` |
+| P4, interfaces and demo | Onboarding (with a preview of each article and section), live view (each purchase shown as a conversation between the buyer's agent and the sales agent), dashboard (sales, audit trail, blockchain payment history), demo run sheet | `frontend/` |
 
 Every step of every workflow calls `log_event()`. The live view and the audit trail are built only from these events, so what the screen shows is what happened.
 
@@ -123,6 +174,7 @@ One SQLite file shared by every component (`shared/db.py`, `DB_PATH`). Tables ar
 | Table | Owner | Holds |
 | --- | --- | --- |
 | `catalog` | ingestion | One row per section: metadata, status (`sellable`, `free`, `excluded`), suggested tier |
+| `catalog_sources` | ingestion | Page or PDF each item was scanned from, shown to the publisher only, never to the sales agent |
 | `content` | ingestion | Raw text per section, read only at delivery |
 | `rules` | gateway | Natural-language rules, generated tiers, confirmed flag |
 | `publisher` | gateway | Name, site URL, wallet, activation time |
@@ -141,7 +193,8 @@ One SQLite file shared by every component (`shared/db.py`, `DB_PATH`). Tables ar
 | `POST /query/{route}` | agent | x402-protected delivery (`t010`, `t050`, `t200`) with watermark and signed receipt |
 | `GET /receipt/{tx_hash}` | agent | Re-download within 24 h, same payer |
 | `GET /compliance/audit-head`, `/compliance/signer`, `POST /compliance/verify-receipt` | anyone | Latest chain hash, publisher signer, receipt check |
-| `POST /publisher/scan`, `GET` and `PATCH /publisher/catalog` | publisher owner | Crawl, review, set status |
+| `POST /publisher/scan`, `GET` and `PATCH /publisher/catalog` | publisher owner | Crawl, review (with each item's source page), set status |
+| `GET /publisher/catalog/{content_id}/preview` | publisher owner | Read one section's text before deciding what to sell (it holds the paid figures, so owner only) |
 | `PUT /publisher/rules`, `POST /publisher/rules/confirm`, `/wallet`, `/activate` | publisher owner | Pricing, payout wallet, go live |
 | `GET /audit/{offer_id}`, `/transactions`, `/publisher/stats`, `/events`, `/events/stream` | publisher owner | Audit trail, sales, revenue, event history and live Server-Sent Events |
 | `GET /compliance/audit-chain`, `/report`, `/screen/{address}`, `POST /compliance/trace`, `/purge`, `/erase` | publisher owner | Full chain check, auditor report, on-demand screening, leak trace, retention and erasure |
@@ -159,7 +212,7 @@ Requirements: Python 3.11+, Node 20+, an Anthropic API key, and test USDC on Bas
 ```bash
 # 1. Backend
 python3.11 -m venv .venv
-.venv/bin/pip install -r requirements.txt -r payments/requirements.txt -r ingestion/requirements.txt
+.venv/bin/pip install -r requirements.txt -r payments/requirements.txt -r ingestion/requirements.txt -r buyer-mcp/requirements.txt
 cp .env.example .env                        # set JWT_SECRET (32+ chars) and ANTHROPIC_API_KEY
 .venv/bin/python scripts/create_wallets.py  # publisher + 4 buyer wallets, then fund the buyers
 .venv/bin/python scripts/encrypt_keys.py --apply --rewrite-env   # move keys to encrypted keystores
@@ -188,11 +241,11 @@ Confidential values live in `.env`, a local file that git never commits: `JWT_SE
 
 ## Testing and execution evidence
 
-159 automated tests cover the system, listed by suite below, and 27 real payments are on public block explorers.
+160 automated tests cover the system, listed by suite below, and 64 real payments are on public block explorers.
 
 | Suite | Tests | Covers |
 | --- | --- | --- |
-| `gateway/tests` | 54 | Human redirect, KYA (wrong signer, replayed nonce, blocklist, OFAC), token bound to headers, offer validation (price, tier floor, excluded content, leak, daily limit), injection, LLM outage, onboarding, owner-only routes, audit chain, receipts, retention, security headers |
+| `gateway/tests` | 56 | Human redirect, KYA (wrong signer, replayed nonce, blocklist, OFAC), token bound to headers, offer validation (price, tier floor, excluded content, leak, daily limit), injection, LLM outage, onboarding, owner-only routes (including the section preview), audit chain, receipts, retention, security headers |
 | `ingestion/tests` | 52 | Crawl of the live site, robots.txt, SSRF refusal, PDF sections, internal page flagging, leak filter formats and Unicode |
 | `payments/tests` | 21 | Owner-only buyer controls, recovery from the chain, rate limit, watermark, keystores |
 | `buyer-agent` | 26 | Budget, cap, approval, daily and hourly caps, structuring, tampered 402, manifest signer pinning, receipt check |
@@ -209,13 +262,13 @@ The gateway tests replace the LLM with scripted outputs, so they need no API key
 | Base Sepolia | Real gateway and Sales agent: one figure | 0.10 USDC | [0x2185e54ad0…](https://sepolia.basescan.org/tx/0x2185e54ad0a5644acf94fd04b8142595eccabae6055fd9a3fb64052486bb2a6f) |
 | Base Sepolia | First x402 payment | 0.01 USDC | [0xa1ca62f97b…](https://sepolia.basescan.org/tx/0xa1ca62f97bca90ec70f63d9ea486aa060ae5bf02bcccc88b981b65ef6c89a3dd) |
 
-The full list (25 Base Sepolia payments, 15.71 test USDC) is read from the chain's USDC `Transfer` logs, not from our database: [`payments/docs/ONCHAIN_EVIDENCE.md`](../payments/docs/ONCHAIN_EVIDENCE.md).
+The full list (62 Base Sepolia payments, 39.21 test USDC, from 17 to 19 October) is read from the chain's USDC `Transfer` logs, not from our database, and can be rebuilt with `scripts/onchain_evidence.py`: [`payments/docs/ONCHAIN_EVIDENCE.md`](../payments/docs/ONCHAIN_EVIDENCE.md).
 
 ## Limitations and future work
 
 - **Agents buy on our gateway, not on the publisher's domain.** Next: an edge proxy and rewrites on the publisher site so the 402 comes from the publisher's own URL. In production a DNS proxy or a plugin (WordPress, Next.js, Cloudflare Worker).
 - **Agents are recognised by declaring themselves.** An undeclared bot is treated as a human and can read public pages. Next: accept signed requests (Web Bot Auth) next to wallet KYA, and keep premium content off public pages.
-- **Paid PDFs are public on the demo site** because the crawler reads them there. Next: upload or private URL for the scan.
+- **Paid PDFs are public on the demo site** because the crawler reads them there (risk R18, open, demo only). The gateway itself never serves paid content before settlement. Next: upload or private URL for the scan.
 - **Domain ownership** is not verified at onboarding.
 - **Granularity.** The smallest sold unit is a report section, so a 0.10 "one figure" sale delivers a paragraph with several figures. Next: atomic fact items.
 - **Keys.** Encrypted keystores are in place on one machine. `.env.mainnet` and the other machines still need migrating, and production needs a KMS or server wallet.

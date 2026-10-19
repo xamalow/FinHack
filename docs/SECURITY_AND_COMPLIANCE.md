@@ -2,7 +2,7 @@
 
 This file is the written record of every security and compliance control in Doubloon. It covers what each control does, why it exists, where the code is, how it was tested, what it shows in the live view, and the regulation or standard behind it. Use it as the source when writing the README, the deck or the submission.
 
-Last update: 18 Oct 2026. Status: everything below is on `main`. 159 automated tests pass. Each control was also checked live on Base Sepolia (testnet USDC), and the connector end-to-end test passed 13/13.
+Last update: 18 Oct 2026. Status: everything below is on `main`. 160 automated tests pass. Each control was also checked live on Base Sepolia (testnet USDC), and the connector end-to-end test passed 13/13.
 
 Related documents:
 - [payments/docs/SECURITY_P3.md](../payments/docs/SECURITY_P3.md): payment controls, buyer permission tiers, risk register.
