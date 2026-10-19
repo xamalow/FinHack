@@ -20,13 +20,13 @@ One FastAPI gateway hosts every server component and one SQLite file holds all s
 
 ![System architecture: one gateway, four roles, two networks](img/architecture.png)
 
-The buyer reaches the gateway over HTTP with x402 headers; the gateway asks the facilitator to verify and settle each payment on Base before it releases any content. Sanctions screening reads the Chainalysis oracle on Ethereum mainnet through a public RPC.
+The buyer reaches the gateway over HTTP with x402 headers. The gateway asks the facilitator to verify and settle each payment on Base before it releases any content. Sanctions screening reads the Chainalysis oracle on Ethereum mainnet through a public RPC.
 
 | Role | Owns | Folders |
 | --- | --- | --- |
 | P1, publisher data | Simulated site, crawler, catalog, leak filter, scan endpoints | `site-demo/`, `ingestion/` |
 | P2, gateway and Sales agent | App entry point, shared schemas, database and events, discovery, KYA, Sales agent, offers, rules, audit, event stream | `gateway/`, `shared/` |
-| P3, payments, buyer and compliance | x402 paid routes, replay protection, receipts, recovery, balances, stats, test buyer agent, MCP connector, wallet scripts; compliance layer (sanctions, audit chain, signing, watermark, retention, keystores, owner access) | `payments/`, `buyer-agent/`, `buyer-mcp/`, `scripts/`, `shared/` compliance modules |
+| P3, payments, buyer and compliance | x402 paid routes, replay protection, receipts, recovery, balances, stats, test buyer agent, MCP connector, wallet scripts. Compliance layer (sanctions, audit chain, signing, watermark, retention, keystores, owner access) | `payments/`, `buyer-agent/`, `buyer-mcp/`, `scripts/`, `shared/` compliance modules |
 | P4, interfaces and demo | Onboarding, live view, dashboard, demo run sheet | `frontend/` |
 
 Every step of every workflow calls `log_event()`. The live view and the audit trail are built only from these events, so what the screen shows is what happened.
@@ -56,11 +56,11 @@ Each buyer message is one turn of `POST /session/message`:
 1. Build the prompt from catalog metadata (excluded items removed), confirmed tiers, publisher rules, today's paid purchases of this wallet, the conversation so far and the buyer message. Buyer text sits inside tags, any section tags it contains are escaped, and it is declared untrusted. The Sales agent never sees paid content.
 2. Call the LLM with a fixed system prompt and a JSON schema: `action` (ask_clarification, propose_offer, no_match, refuse), `message_to_buyer`, optional `offer`, `injection_detected`.
 3. Validate in code:
-   - the tier exists in the confirmed table and the price equals the tier price exactly;
-   - the tier is not below the suggested tier of the content it sells;
-   - the offer covers exactly one `content_id`, and that item is `sellable`;
-   - the daily limit holds: at most 3 sections of one report per wallet per day, counting paid offers and accepted offers still inside their 300 s payment window, checked again at `/offer/accept`;
-   - the leak filter finds no paid figure in the message or the offer scope;
+   - the tier exists in the confirmed table and the price equals the tier price exactly
+   - the tier is not below the suggested tier of the content it sells
+   - the offer covers exactly one `content_id`, and that item is `sellable`
+   - the daily limit holds: at most 3 sections of one report per wallet per day, counting paid offers and accepted offers still inside their 300 s payment window, checked again at `/offer/accept`
+   - the leak filter finds no paid figure in the message or the offer scope
    - at most one clarifying question per session.
 4. On failure, retry once with the errors as feedback. A second failure returns a safe refusal. A rejected offer never reaches the buyer.
 5. A valid offer is stored as `proposed` with a 300 s expiry. Injection attempts (regex or the LLM's own flag) are logged as `injection_ignored`. A session accepts at most 6 buyer messages.
@@ -69,13 +69,13 @@ Each buyer message is one turn of `POST /session/message`:
 
 1. `POST /kya/challenge` returns a 32-byte random nonce, valid 120 s, tied to the declared agent id and wallet.
 2. The agent signs the nonce with EIP-191. `POST /kya/verify` consumes the nonce atomically (single use), recovers the signer with `eth_account` and checks it equals `X-Agent-Wallet`.
-3. An agent id stays bound to its first wallet (checked first). The wallet is then screened against a local blocklist and the OFAC SDN list through the Chainalysis oracle (`isSanctioned`, cached 1 h; fail closed on mainnet, open on testnet).
+3. An agent id stays bound to its first wallet (checked first). The wallet is then screened against a local blocklist and the OFAC SDN list through the Chainalysis oracle (`isSanctioned`, cached 1 h, fail closed on mainnet, open on testnet).
 4. Success issues an HS256 JWT valid 15 minutes. Every later request must carry it with the same `X-Agent-Id` and `X-Agent-Wallet`.
 
 ### 5. x402 payment, settled before delivery
 
 1. `POST /offer/accept` moves the offer to `accepted` (only from `proposed`, only before expiry, daily limit re-checked) and returns its route.
-2. `POST /query/{route}` without payment answers 402. The `PAYMENT-REQUIRED` header is rebuilt server-side from the confirmed tier price and the publisher wallet; the client amount is never trusted.
+2. `POST /query/{route}` without payment answers 402. The `PAYMENT-REQUIRED` header is rebuilt server-side from the confirmed tier price and the publisher wallet. The client amount is never trusted.
 3. The buyer checks the invoice in code, then signs an EIP-3009 `TransferWithAuthorization` (exact amount, recipient, 120 s window, random 32-byte nonce). The facilitator pays the gas.
 4. The gateway requires the payer to be the wallet verified at KYA, screens it again for sanctions, reserves `(nonce, offer_id)` under UNIQUE constraints, then calls the facilitator `/verify` and `/settle`.
 5. Only after settlement: mark the offer `paid`, load the purchased content, add a per-buyer watermark (a visible license line and an invisible HMAC id), sign a license receipt (tx, payer, amount, license, SHA-256 of the content), and return 200 with a `PAYMENT-RESPONSE` header carrying the transaction hash.
@@ -87,9 +87,9 @@ Each buyer message is one turn of `POST /session/message`:
 
 ### 7. Buyer agent decision
 
-1. On first contact, check the manifest signature and pin the publisher signer (trust on first use, or `BUYER_TRUSTED_SIGNERS`); later, a changed, re-signed or unsigned manifest is refused.
-2. Before the LLM sees an offer, code checks: price ≤ remaining budget (5.00 USDC), price ≤ per-purchase cap (2.50), price ≤ approval threshold (1.00), otherwise it pauses for the owner. A per-wallet spend ledger adds 25 USDC per day and 20 purchases per hour; 3 purchases in 24 h at 80 to 100% of the threshold force an approval (structuring detection).
-3. The LLM proposes accept, refuse or counter (at most 3 rounds). Its output is a JSON schema; an error or refusal means refuse.
+1. On first contact, check the manifest signature and pin the publisher signer (trust on first use, or `BUYER_TRUSTED_SIGNERS`). Later, a changed, re-signed or unsigned manifest is refused.
+2. Before the LLM sees an offer, code checks: price ≤ remaining budget (5.00 USDC), price ≤ per-purchase cap (2.50), price ≤ approval threshold (1.00), otherwise it pauses for the owner. A per-wallet spend ledger adds 25 USDC per day and 20 purchases per hour. 3 purchases in 24 h at 80 to 100% of the threshold force an approval (structuring detection).
+3. The LLM proposes accept, refuse or counter (at most 3 rounds). Its output is a JSON schema. An error or refusal means refuse.
 4. Before signing, code checks the 402: one option, scheme `exact`, the expected network and USDC asset, `payTo` equal to the manifest wallet and not sanctioned, amount equal to the offer price.
 5. The x402 client has its own ceiling (`max_amount_per_payment`), a second rail if our code had a bug.
 6. After delivery, the buyer verifies the license receipt signature and that its tx hash, payer and amount match its own payment.
@@ -98,23 +98,23 @@ The MCP connector (`buyer-mcp/`) applies the same checks when someone's own Clau
 
 ### 8. Compliance layer
 
-- **Audit chain.** Each event is chained in the same database transaction that stores it, so editing, deleting or inserting an event breaks the chain from that point. `GET /compliance/audit-head` publishes the latest hash; `scripts/anchor_audit.py` can write it on-chain.
+- **Audit chain.** Each event is chained in the same database transaction that stores it, so editing, deleting or inserting an event breaks the chain from that point. `GET /compliance/audit-head` publishes the latest hash. `scripts/anchor_audit.py` can write it on-chain.
 
   `h_i = SHA256(h_(i-1) || event_id_i || SHA256(event_i))`
 
 - **Signing.** One publisher key signs the manifest and every license receipt with EIP-191 over canonical JSON and a domain line, so any Ethereum library can verify them offline.
-- **Watermark.** The receipt id is an HMAC-SHA256 of (offer, payer), 48 bits, written as a visible license line and in zero-width characters; `POST /compliance/trace` maps a leaked text back to its sale.
-- **Retention.** At start and on request, conversations older than 30 days (or of one wallet, on an erasure request) are deleted and their event text replaced; the chain keeps the hash, so it still verifies. Offers, transactions and receipts are kept as financial records.
+- **Watermark.** The receipt id is an HMAC-SHA256 of (offer, payer), 48 bits, written as a visible license line and in zero-width characters. `POST /compliance/trace` maps a leaked text back to its sale.
+- **Retention.** At start and on request, conversations older than 30 days (or of one wallet, on an erasure request) are deleted and their event text replaced. The chain keeps the hash, so it still verifies. Offers, transactions and receipts are kept as financial records.
 
 ## Security design
 
 Security rests on five principles, each enforced in code. The permission tiers, controls and known-risk list are in the [Security Self-Assessment Report](SECURITY_SELF_ASSESSMENT.md).
 
 - **LLMs have no authority.** Sales agent and buyer LLM outputs are proposals checked by deterministic code (tier, exact price, tier floor, sellable content, daily limit, leak filter, budget, cap, velocity, approval threshold).
-- **The seller never sees what it sells.** The Sales agent works from metadata only; paid content is loaded once, after settlement, for the buyer who paid.
+- **The seller never sees what it sells.** The Sales agent works from metadata only. Paid content is loaded once, after settlement, for the buyer who paid.
 - **Money moves before data, only once, and only between screened parties.** The amount is fixed server-side, the payer must be the KYA wallet, both sides are screened against OFAC, `(nonce, offer_id)` is unique, settlement happens on-chain before delivery, and a lost delivery is recovered from the chain.
 - **Configuration and buyer data belong to their owner.** Publisher setup, dashboards with buyer data and buyer controls accept only loopback callers or an owner token.
-- **Everything is visible and provable.** Every step emits an event with secrets masked, chained by SHA-256; each sale ends with a signed license receipt.
+- **Everything is visible and provable.** Every step emits an event with secrets masked, chained by SHA-256. Each sale ends with a signed license receipt.
 
 ## Data model and API
 
@@ -126,10 +126,10 @@ One SQLite file shared by every component (`shared/db.py`, `DB_PATH`). Tables ar
 | `content` | ingestion | Raw text per section, read only at delivery |
 | `rules` | gateway | Natural-language rules, generated tiers, confirmed flag |
 | `publisher` | gateway | Name, site URL, wallet, activation time |
-| `agents`, `kya_challenges`, `sessions` | gateway | Agent id bound to wallet and status; single-use nonces; sessions with expiry and round count |
-| `messages`, `offers` | gateway | Conversation (erased after 30 days); offers with tier, price, status, expiry |
-| `transactions`, `license_receipts` | payments | Payer, payee, amount, EIP-3009 nonce (unique), offer (unique), tx hash, status; signed receipt per sale |
-| `events`, `audit_chain` | all | Timestamp, session, actor, type, summary, masked payload; content hash and chain hash per event |
+| `agents`, `kya_challenges`, `sessions` | gateway | Agent id bound to wallet and status. Single-use nonces. Sessions with expiry and round count |
+| `messages`, `offers` | gateway | Conversation (erased after 30 days). Offers with tier, price, status, expiry |
+| `transactions`, `license_receipts` | payments | Payer, payee, amount, EIP-3009 nonce (unique), offer (unique), tx hash, status. Signed receipt per sale |
+| `events`, `audit_chain` | all | Timestamp, session, actor, type, summary, masked payload. Content hash and chain hash per event |
 
 | Endpoint | Caller | Purpose |
 | --- | --- | --- |
@@ -184,11 +184,11 @@ NEXT_PUBLIC_GATEWAY_URL=http://localhost:8000 npm run dev   # http://localhost:3
 | `FACILITATOR_URL` | `https://x402.org/facilitator` | `https://facilitator.payai.network` |
 | How | `.env` | `.env.mainnet`, commands prefixed with `scripts/mainnet.sh` |
 
-Secrets (`JWT_SECRET`, API keys, owner tokens) live in `.env`, which git ignores; private keys go to encrypted keystores with the password in the OS keychain (`KEYSTORE_PASSWORD` where there is none). Set `PUBLISHER_OWNER_TOKEN` and `BUYER_OWNER_TOKEN` to manage the gateway from another machine; without them, setup and dashboards answer only on loopback. Sanctions screening reads `SANCTIONS_RPC_URL` (Ethereum mainnet). To use your own Claude as a buyer, add `buyer-mcp/server.py` to Claude Desktop or Claude Code (see `buyer-mcp/README.md`).
+Sensitive values live in `.env`, a local file that git never commits: `JWT_SECRET` (the key that signs agent session tokens), the Anthropic API key, the owner tokens and optional facilitator API keys. Wallet private keys go to encrypted keystores with the password in the OS keychain (`KEYSTORE_PASSWORD` where there is none). Set `PUBLISHER_OWNER_TOKEN` and `BUYER_OWNER_TOKEN` to manage the gateway from another machine. Without them, setup and dashboards answer only on loopback. Sanctions screening reads `SANCTIONS_RPC_URL` (Ethereum mainnet). To use your own Claude as a buyer, add `buyer-mcp/server.py` to Claude Desktop or Claude Code (see `buyer-mcp/README.md`).
 
 ## Testing and execution evidence
 
-159 automated tests cover the system, and 27 real payments are on public block explorers. On a clean Windows checkout on 18 Oct, 157 pass; the 2 others depend on the machine (a Unix file mode, a `PUBLISHER_WALLET_ADDRESS` in `.env`) and pass on P3's setup.
+159 automated tests cover the system, and 27 real payments are on public block explorers. On a clean Windows checkout on 18 Oct, 157 pass. The 2 others depend on the machine (a Unix file mode, a `PUBLISHER_WALLET_ADDRESS` in `.env`) and pass on P3's setup.
 
 | Suite | Tests | Covers |
 | --- | --- | --- |
@@ -213,12 +213,12 @@ The full list (25 Base Sepolia payments, 15.71 test USDC) is read from the chain
 
 ## Limitations and future work
 
-- **Agents buy on our gateway, not on the publisher's domain.** Next: an edge proxy and rewrites on the publisher site so the 402 comes from the publisher's own URL; in production a DNS proxy or a plugin (WordPress, Next.js, Cloudflare Worker).
+- **Agents buy on our gateway, not on the publisher's domain.** Next: an edge proxy and rewrites on the publisher site so the 402 comes from the publisher's own URL. In production a DNS proxy or a plugin (WordPress, Next.js, Cloudflare Worker).
 - **Agents are recognised by declaring themselves.** An undeclared bot is treated as a human and can read public pages. Next: accept signed requests (Web Bot Auth) next to wallet KYA, and keep premium content off public pages.
 - **Paid PDFs are public on the demo site** because the crawler reads them there. Next: upload or private URL for the scan.
 - **Domain ownership** is not verified at onboarding.
 - **Granularity.** The smallest sold unit is a report section, so a 0.10 "one figure" sale delivers a paragraph with several figures. Next: atomic fact items.
-- **Keys.** Encrypted keystores are in place on one machine; `.env.mainnet` and the other machines still need migrating, and production needs a KMS or server wallet.
-- **Trust and screening.** The manifest signer is trusted on first use; sanctions screening covers OFAC only, through a free oracle; the audit head is not yet anchored on-chain.
+- **Keys.** Encrypted keystores are in place on one machine. `.env.mainnet` and the other machines still need migrating, and production needs a KMS or server wallet.
+- **Trust and screening.** The manifest signer is trusted on first use. Sanctions screening covers OFAC only, through a free oracle. The audit head is not yet anchored on-chain.
 - **One facilitator per network**, and approvals and rate-limit counters live in memory (lost on restart, per process).
 - **Out of scope:** refunds and disputes, platform commission, multi-publisher marketplace, protection against rebuilding a report from many wallets beyond the daily limit.
