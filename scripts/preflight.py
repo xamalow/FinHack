@@ -120,8 +120,9 @@ def main():
                 continue
             address = Account.from_key(key).address
             balance = usdc.functions.balanceOf(address).call() / 1_000_000
-            level = "OK" if balance >= DEMO_NEEDS_USDC else ("FAIL" if i == 1 else "WARN")
-            report(level, f"buyer {i} {address}", f"{balance:.2f} USDC, demo needs {DEMO_NEEDS_USDC:.2f}"
+            demo_wallet = i == int(os.getenv("MCP_BUYER_WALLET", "1"))  # the wallet the Claude connector spends
+            level = "OK" if balance >= DEMO_NEEDS_USDC else ("FAIL" if demo_wallet else "WARN")
+            report(level, f"buyer {i} {address}" + (" (connector)" if demo_wallet else ""), f"{balance:.2f} USDC, demo needs {DEMO_NEEDS_USDC:.2f}"
                    + ("" if level == "OK" else (", send USDC on the Base network to this address" if NETWORK == "eip155:8453"
                                                else ", refill at faucet.circle.com (Base Sepolia)")))
         pay_to = (manifest or {}).get("payment", {}).get("pay_to") or os.getenv("PUBLISHER_WALLET_ADDRESS")

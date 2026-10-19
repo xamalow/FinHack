@@ -50,7 +50,9 @@ from shared import sanctions  # noqa: E402
 from shared.keys import load_private_key  # noqa: E402
 
 MANIFEST_URL = os.getenv("MCP_MANIFEST_URL") or os.getenv("BUYER_MANIFEST_URL", "http://127.0.0.1:8000/.well-known/ai-data.json")
-PRIVATE_KEY = load_private_key("MCP_BUYER_PRIVATE_KEY") or load_private_key("BUYER_PRIVATE_KEY_1") or ""
+# MCP_BUYER_WALLET=n picks BUYER_PRIVATE_KEY_n (plaintext or keystore) for the connector, default wallet 1.
+PRIVATE_KEY = (load_private_key("MCP_BUYER_PRIVATE_KEY")
+               or load_private_key(f"BUYER_PRIVATE_KEY_{os.getenv('MCP_BUYER_WALLET', '1')}") or "")
 BUDGET_USDC = float(os.getenv("MCP_BUDGET_USDC") or os.getenv("BUYER_BUDGET_USDC", "5.00"))
 SOURCE = {"source": "mcp", "client": "personal AI assistant"}
 
