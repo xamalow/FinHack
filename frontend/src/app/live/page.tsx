@@ -161,7 +161,8 @@ function buildThread(key: string, sessionId: string | null, wallet: string | nul
         t.offerId = String(offer.offer_id ?? t.offerId ?? "");
         t.contentId = contentIds(offer.content_ids)[0] ?? t.contentId;
         const what = t.contentId && titles[t.contentId];
-        put({ key: "offer", side: "seller", tone: "plain", title: `${TIER_LABEL[tier] ?? "Offer"} · ${Number(offer.price_usdc ?? 0).toFixed(2)} USDC`, detail: clip(String(what || offer.scope || ""), 110), event: e });
+        // Each negotiation round is its own offer bubble, in the order it was made.
+        put({ key: `offer${t.bubbles.length}`, side: "seller", tone: "plain", title: `${TIER_LABEL[tier] ?? "Offer"} · ${Number(offer.price_usdc ?? 0).toFixed(2)} USDC`, detail: clip(String(what || offer.scope || ""), 110), event: e });
         break;
       }
       case "sales_message": {
@@ -169,8 +170,8 @@ function buildThread(key: string, sessionId: string | null, wallet: string | nul
         const text = String(e.payload.message_to_buyer ?? "");
         const action = String(e.payload.action ?? "");
         if (!text || !/^Sales agent to buyer/i.test(e.summary)) break;
-        const offerBubble = t.bubbles.find((b) => b.key === "offer");
-        if (action === "propose_offer" && offerBubble) offerBubble.quote = clip(text, 170);
+        const offerBubble = t.bubbles.findLast((b) => b.key.startsWith("offer"));
+        if (action === "propose_offer" && offerBubble && !offerBubble.quote) offerBubble.quote = clip(text, 170);
         else if (action !== "no_match") put({ key: `reply${t.bubbles.length}`, side: "seller", tone: "plain", title: "", quote: clip(text, 170), event: e });
         break;
       }
@@ -380,11 +381,13 @@ export default function LiveView() {
   // The banner tells the latest sale from the seller's side: what was sold, for how much. Never the buyer's budget.
   const outcome = useMemo(() => {
     const t = threads[0];
-    if (!t || !(t.delivered || t.blocked || t.noMatch)) return null;
+    if (!t) return null;
     if (t.delivered) return { tone: "ok" as const, text: `Sold ${(TIER_LABEL[t.tier ?? ""] ?? "data").toLowerCase()} for ${t.amount.toFixed(2)} USDC, paid to your wallet` };
     if (t.blocked) return { tone: "bad" as const, text: t.bubbles.findLast((b) => b.tone === "bad")?.title ?? "Blocked" };
-    return { tone: "info" as const, text: "Not in the catalog, no sale" };
-  }, [threads]);
+    if (t.noMatch) return { tone: "info" as const, text: "Not in the catalog, nothing paid" };
+    if (threadStatus(t, now, false).label === "No purchase") return { tone: "info" as const, text: "The buyer's agent did not accept the offer, nothing paid" };
+    return null;
+  }, [threads, now]);
 
   const clear = () => {
     const last = events.reduce((m, e) => (e.ts > m ? e.ts : m), clearedAt || new Date().toISOString());
@@ -537,6 +540,13 @@ function ThreadCard({ thread: t, status, defaultOpen, onSelect }: { thread: Thre
                 <BubbleRow key={b.key} bubble={b} delay={i < (firstBatch.current ?? 0) ? i * 140 : 0} onSelect={onSelect} />
               ))}
               {typing && <Typing side={typing} />}
+              {status.label === "No purchase" && t.bubbles.some((b) => b.key.startsWith("offer")) && !t.bubbles.some((b) => b.key === "deal") && (
+                <div className="flex justify-center">
+                  <div className="animate-pop rounded-full bg-surface px-4 py-1.5 text-center text-[13px] text-muted ring-1 ring-border">
+                    No deal · the buyer&apos;s agent did not accept, nothing was paid
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
