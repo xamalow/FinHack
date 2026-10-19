@@ -1,10 +1,10 @@
 # Doubloon: Security Self-Assessment Report
 
-18 October 2026 · Maximilien Rambaud
+18 October 2026 · Maximilien Rambaud, Cosme de Ranieri, Aristote Pellissier, Nathanaël Muller
 
 ## Scope and threat model
 
-Doubloon moves real money between AI agents, so the assessment centres on one question: can anyone get paid data without paying, pay the wrong amount, or spend a wallet without its owner's consent? The answer today is no for every path we tested, with 18 known risks listed below. Since 18 Oct a compliance layer adds sanctions screening, signed receipts and a tamper-evident audit log.
+Doubloon moves real money between AI agents, so the assessment centres on one question: can anyone get paid data without paying, pay the wrong amount, or spend a wallet without its owner's consent? The answer today is no for every path we tested, with 17 known risks listed below. A compliance layer adds sanctions screening, signed receipts and a tamper-evident audit log.
 
 **Scope.** The gateway (`gateway/`, `shared/`), ingestion (`ingestion/`), payments and buyer agent (`payments/`, `buyer-agent/`, `buyer-mcp/`, `scripts/`) and the web app (`frontend/`), on Base Sepolia and Base mainnet, as of commit `920db0b` on `main`.
 
@@ -92,40 +92,35 @@ On top of these levels, limits follow the wallet across runs and processes (`Spe
 | Records | Personal data kept forever | Conversations erased after 30 days or on request. Offers, transactions and receipts kept (AML record keeping) | `shared/retention.py` | No |
 | Records | Buyer data exposed | Live view, audit, stats and compliance routes owner-only | `shared/owner.py`, `gateway/routers/events.py` | No |
 
-Across all stages: confidential values (`JWT_SECRET`, which signs session tokens, the Anthropic API key, owner tokens and wallet private keys) live in `.env`, a local file that git never commits, or in encrypted keystores (`scripts/encrypt_keys.py`, password in the OS keychain). `log_event()` masks payload keys such as `token`, `secret`, `private_key`, `authorization`. The payment signature is never logged. Paid routes are rate-limited to 30 requests per minute per session (per IP before KYA). API responses carry `nosniff`, `X-Frame-Options: DENY`, a `default-src 'none'` CSP and `no-store` on paid content. `pip-audit` reports no known Python vulnerability (18 Oct).
+Across all stages: confidential values (`JWT_SECRET`, which signs session tokens, the Anthropic API key, owner tokens and wallet private keys) live in `.env`, a local file that git never commits, or in encrypted keystores (`scripts/encrypt_keys.py`, password in the OS keychain). `log_event()` masks payload keys such as `token`, `secret`, `private_key`, `authorization`. The payment signature is never logged. Paid routes are rate-limited to 30 requests per minute per session (per IP before KYA). API responses carry `nosniff`, `X-Frame-Options: DENY`, a `default-src 'none'` CSP and `no-store` on paid content. `pip-audit` reports no known Python vulnerability.
 
 ## Known-risk list
 
-18 known risks: 2 open, 5 partly mitigated, 4 mitigated, 7 accepted for the hackathon. The one that matters most before a public deployment is R2: anyone could list a site they do not own.
+The table below lists the 17 known risks, with their current mitigation and status: 2 open, 5 partly mitigated, 4 mitigated and 6 accepted for the hackathon.
 
 | ID | Risk | Current mitigation | Status |
 | --- | --- | --- | --- |
-| R1 | Publisher setup routes (rules, payout wallet, scan, catalog) could be changed by anyone who reaches the gateway | Owner-only since 18 Oct: loopback or `PUBLISHER_OWNER_TOKEN`, constant-time compare, rotation and expiry. Payout wallet screened | Mitigated |
+| R1 | Publisher setup routes (rules, payout wallet, scan, catalog) could be changed by anyone who reaches the gateway | Owner-only: loopback or `PUBLISHER_OWNER_TOKEN`, constant-time compare, rotation and expiry. Payout wallet screened | Mitigated |
 | R2 | Domain ownership is not verified at onboarding: someone could list a site they do not own | Demo uses our own simulated site. Planned DNS or file-based ownership check | Open |
-| R3 | Demo only: the simulated site serves its paid PDFs as public files, so anyone can download them without paying. Agents that do not declare themselves are treated as human visitors | In production, paid content is uploaded or read from a private URL and never published, so a visitor or an undeclared bot only sees what the publisher already gives away. The gateway delivers paid content only after settlement | Accepted |
-| R4 | New wallets are free, so many identities can bypass the 3-sections-per-report daily limit and rebuild a report | Limit now follows the wallet and is re-checked at accept. Every section is still paid at its full tier. Reputation or stake per wallet is future work | Partly mitigated |
-| R5 | Leak filter misses figures written in words, rounded or derived ("about 31%") | By design the Sales agent never sees paid figures. Filter normalises Unicode as a second rail | Mitigated |
-| R6 | Buyer and publisher private keys are hot keys | Encrypted keystores (scrypt, AES-128-CTR) with the password in the OS keychain on P3's machine. `.env.mainnet` and other machines not migrated yet. Production needs a KMS or server wallet | Partly mitigated |
-| R7 | Buyer controls (`/buyer/run`, `/approve`, `/replay-last`) could spend our wallets if reachable | Loopback only, or `X-Owner-Token` with rotation and expiry. Peer address checked, `X-Forwarded-For` ignored | Mitigated |
-| R8 | Facilitator or RPC outage blocks or delays settlement | Settle retried 3 times. Facilitator configurable (`FACILITATOR_URL`). No second facilitator configured | Partly mitigated |
-| R9 | Crash between on-chain transfer and the database write: buyer paid, nothing delivered | Recovery from the USDC contract (`authorizationState`, `AuthorizationUsed`). Receipt re-download for 24 h | Mitigated |
-| R10 | A buyer LLM is talked into a poor purchase within limits. In the MCP connector, approval relies on the assistant asking its user | 1.00 threshold, 2.50 cap, 25 USDC per day, structuring detection, all in code. `owner_approved` counts only after the connector asked | Partly mitigated |
-| R11 | Approvals, buyer runs and rate-limit counters live in memory, per process | Transactions and the spend ledger are persisted. Acceptable for a single-process demo | Accepted |
-| R12 | Smallest sold unit is a report section, so a 0.10 "one figure" sale delivers several figures | Tier floor stops selling a section below its tier. Atomic fact items planned | Open |
-| R13 | Sessions are signed with one HS256 key (`JWT_SECRET`) with no revocation. A leaked key would allow forged sessions | 15-minute tokens bound to agent id and wallet. Warning when `JWT_SECRET` is under 32 characters. A forged session still cannot pay from another wallet | Accepted |
-| R14 | Sanctions screening covers OFAC only, through a free oracle with no timeliness guarantee. Fail-open on testnet | Fail-closed on mainnet. Local blocklist. Paid screening (KYT, TRM, Elliptic) and EU, UN, UK lists are post-hackathon | Accepted |
-| R15 | Manifest trust is trust on first use: a forged first contact would be pinned | `BUYER_TRUSTED_SIGNERS` pins keys explicitly. Signer published at `/compliance/signer`. DNS-published signer planned | Accepted |
-| R16 | The audit chain lives in the database it protects: tampering is detectable, not prevented | `scripts/anchor_audit.py` writes the head on-chain. Not yet run (needs gas) | Partly mitigated |
-| R17 | 25 npm alerts (2 high) in transitive WalletConnect dependencies of the web app | Client-side wallet libraries in a local demo. Fix needs a breaking wagmi upgrade | Accepted |
-| R18 | The watermark deters but does not prevent resale: rewording removes it | Visible license line plus invisible HMAC mark. Signed receipt proves the original sale | Accepted |
-
-![Risk matrix: 18 risks by residual likelihood and impact](img/risk-matrix.png)
-
-Likelihood is the team's estimate of the residual risk for a public deployment, after current mitigations. The only high-impact risk still open (R2) sits outside the payment path.
+| R3 | New wallets are free, so many identities can bypass the 3-sections-per-report daily limit and rebuild a report | Limit now follows the wallet and is re-checked at accept. Every section is still paid at its full tier. Reputation or stake per wallet is future work | Partly mitigated |
+| R4 | Leak filter misses figures written in words, rounded or derived ("about 31%") | By design the Sales agent never sees paid figures. Filter normalises Unicode as a second rail | Mitigated |
+| R5 | Buyer and publisher private keys are hot keys | Encrypted keystores (scrypt, AES-128-CTR) with the password in the OS keychain on one development machine. `.env.mainnet` and other machines not migrated yet. Production needs a KMS or server wallet | Partly mitigated |
+| R6 | Buyer controls (`/buyer/run`, `/approve`, `/replay-last`) could spend our wallets if reachable | Loopback only, or `X-Owner-Token` with rotation and expiry. Peer address checked, `X-Forwarded-For` ignored | Mitigated |
+| R7 | Facilitator or RPC outage blocks or delays settlement | Settle retried 3 times. Facilitator configurable (`FACILITATOR_URL`). No second facilitator configured | Partly mitigated |
+| R8 | Crash between on-chain transfer and the database write: buyer paid, nothing delivered | Recovery from the USDC contract (`authorizationState`, `AuthorizationUsed`). Receipt re-download for 24 h | Mitigated |
+| R9 | A buyer LLM is talked into a poor purchase within limits. In the MCP connector, approval relies on the assistant asking its user | 1.00 threshold, 2.50 cap, 25 USDC per day, structuring detection, all in code. `owner_approved` counts only after the connector asked | Partly mitigated |
+| R10 | Approvals, buyer runs and rate-limit counters live in memory, per process | Transactions and the spend ledger are persisted. Acceptable for a single-process demo | Accepted |
+| R11 | Smallest sold unit is a report section, so a 0.10 "one figure" sale delivers several figures | Tier floor stops selling a section below its tier. Atomic fact items planned | Open |
+| R12 | Sessions are signed with one HS256 key (`JWT_SECRET`) with no revocation. A leaked key would allow forged sessions | 15-minute tokens bound to agent id and wallet. Warning when `JWT_SECRET` is under 32 characters. A forged session still cannot pay from another wallet | Accepted |
+| R13 | Sanctions screening covers OFAC only, through a free oracle with no timeliness guarantee. Fail-open on testnet | Fail-closed on mainnet. Local blocklist. Paid screening (KYT, TRM, Elliptic) and EU, UN, UK lists are post-hackathon | Accepted |
+| R14 | Manifest trust is trust on first use: a forged first contact would be pinned | `BUYER_TRUSTED_SIGNERS` pins keys explicitly. Signer published at `/compliance/signer`. DNS-published signer planned | Accepted |
+| R15 | The audit chain lives in the database it protects: tampering is detectable, not prevented | `scripts/anchor_audit.py` writes the head on-chain. Not yet run (needs gas) | Partly mitigated |
+| R16 | 25 npm alerts (2 high) in transitive WalletConnect dependencies of the web app | Client-side wallet libraries in a local demo. Fix needs a breaking wagmi upgrade | Accepted |
+| R17 | The watermark deters but does not prevent resale: rewording removes it | Visible license line plus invisible HMAC mark. Signed receipt proves the original sale | Accepted |
 
 ## Evidence
 
-159 automated tests cover these controls (54 gateway, 52 ingestion, 21 payments, 26 buyer agent, 5 connector). On a clean Windows checkout on 18 Oct, 157 pass. The 2 others depend on the machine (a Unix file mode, a `PUBLISHER_WALLET_ADDRESS` in `.env`) and pass on P3's setup. Each control also leaves events that the live view and the audit trail show.
+159 automated tests cover these controls (54 gateway, 52 ingestion, 21 payments, 26 buyer agent, 5 connector). The table below maps each control to its tests and to its live or on-chain evidence.
 
 | Control | Automated test | Live or on-chain evidence |
 | --- | --- | --- |
@@ -148,10 +143,9 @@ All 27 payments (25 Base Sepolia, 2 Base mainnet) are listed from the chain's US
 The payment path and the compliance layer are ready for small real amounts, as the mainnet sale shows. What remains is about who may list a site, and about key custody.
 
 1. Verify domain ownership at onboarding with a DNS record or a file on the site (R2).
-2. Before any public demo, move the paid PDFs out of the demo site, and accept signed bot requests (Web Bot Auth) next to wallet KYA to recognise agents that do not declare themselves (R3).
-3. Run `scripts/encrypt_keys.py` on every machine and on `.env.mainnet`, then move keys to a KMS or server wallet (R6).
-4. Anchor the audit head on-chain on a schedule (R16), and publish the manifest signer in DNS to remove trust on first use (R15).
-5. Add a paid screening provider and the EU, UN and UK lists (R14).
-6. Persist approvals and rate-limit counters in a shared store, and configure a second facilitator (R8, R11).
-7. Sell atomic fact items, and add per-wallet reputation or stake against many-identity reconstruction (R4, R12).
-8. Replace the single session-signing key with rotating or asymmetric keys (R13), and upgrade wagmi to clear the npm alerts (R17).
+2. Run `scripts/encrypt_keys.py` on every machine and on `.env.mainnet`, then move keys to a KMS or server wallet (R5).
+3. Anchor the audit head on-chain on a schedule (R15), and publish the manifest signer in DNS to remove trust on first use (R14).
+4. Add a paid screening provider and the EU, UN and UK lists (R13).
+5. Persist approvals and rate-limit counters in a shared store, and configure a second facilitator (R7, R10).
+6. Sell atomic fact items, and add per-wallet reputation or stake against many-identity reconstruction (R3, R11).
+7. Replace the single session-signing key with rotating or asymmetric keys (R12), and upgrade wagmi to clear the npm alerts (R16).

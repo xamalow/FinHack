@@ -1,6 +1,6 @@
 # Technical Documentation: Doubloon
 
-18 October 2026 · Maximilien Rambaud
+18 October 2026 · Maximilien Rambaud, Cosme de Ranieri, Aristote Pellissier, Nathanaël Muller
 
 ## Overview
 
@@ -188,7 +188,7 @@ Confidential values live in `.env`, a local file that git never commits: `JWT_SE
 
 ## Testing and execution evidence
 
-159 automated tests cover the system, and 27 real payments are on public block explorers. On a clean Windows checkout on 18 Oct, 157 pass. The 2 others depend on the machine (a Unix file mode, a `PUBLISHER_WALLET_ADDRESS` in `.env`) and pass on P3's setup.
+159 automated tests cover the system, listed by suite below, and 27 real payments are on public block explorers.
 
 | Suite | Tests | Covers |
 | --- | --- | --- |
