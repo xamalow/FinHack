@@ -17,7 +17,7 @@ from datetime import timedelta
 from shared import db
 
 PERSONAL_EVENT_TYPES = (
-    "buyer_message", "sales_message", "injection_ignored", "offer_rejected", "offer_evaluated",
+    "buyer_message", "buyer_message_received", "sales_message", "injection_ignored", "offer_rejected", "offer_evaluated",
     "mission_started", "discover_called", "no_match",
 )
 REDACTED_SUMMARY = "[personal data erased]"

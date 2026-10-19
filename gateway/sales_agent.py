@@ -207,6 +207,8 @@ def _prompt(session_id: str, agent_id: str, buyer_message: str, catalog: dict[st
 
 def handle_message(session_id: str, agent_id: str, buyer_message: str) -> TurnResult:
     db.add_message(session_id, "buyer", buyer_message)
+    # What the seller received, so the publisher's view never depends on the buyer's own logs.
+    log_event(session_id, "gateway", "buyer_message_received", buyer_message[:120], {"message": buyer_message})
     rounds = db.increment_rounds(session_id)
 
     if rounds > MAX_SESSION_MESSAGES:

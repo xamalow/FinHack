@@ -63,6 +63,7 @@ const LABELS: Record<string, EventLabel> = {
   manifest_signature_failed: L("🚫", "Fake publisher file refused", "The payment address was not signed by the publisher. Nothing is paid.", "identity", "bad"),
   velocity_limit_hit: L("⏱️", "Spending limit reached", "The agent hit its daily or hourly limit and stopped.", "negotiation", "bad"),
   structuring_suspected: L("🧩", "Split purchases detected", "Several purchases just under the approval limit: a human must approve.", "negotiation", "warn"),
+  buyer_message_received: L("💬", "Agent asks for data", "What the buyer's agent asked our sales agent.", "negotiation"),
   offer_accepted: L("🤝", "Offer accepted", "The agent takes the offer. The price is now fixed.", "negotiation", "ok"),
 
   // Payment

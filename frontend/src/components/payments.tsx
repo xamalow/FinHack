@@ -154,3 +154,60 @@ export function PaymentCard({ payment: p, fresh }: { payment: Payment; fresh: bo
     </div>
   );
 }
+
+const dayKey = (ts: string) => new Date(ts).toDateString();
+function dayLabel(ts: string): string {
+  const d = new Date(ts);
+  const today = new Date();
+  const yesterday = new Date(Date.now() - 86_400_000);
+  if (sameDay(d, today)) return "Today";
+  if (sameDay(d, yesterday)) return "Yesterday";
+  return d.toLocaleDateString([], { weekday: "short", day: "numeric", month: "short" });
+}
+
+// The payment history grouped by day, newest first: each day shows its count and total, the two latest are open.
+export function PaymentDays({ payments, fresh }: { payments: Payment[]; fresh: Set<string> }) {
+  const days: { key: string; label: string; items: Payment[] }[] = [];
+  for (const p of payments) {
+    const key = dayKey(p.ts);
+    const last = days.at(-1);
+    if (last?.key === key) last.items.push(p);
+    else days.push({ key, label: dayLabel(p.ts), items: [p] });
+  }
+  return (
+    <div className="space-y-3">
+      {days.map((d, i) => (
+        <PaymentDay key={d.key} label={d.label} items={d.items} fresh={fresh} defaultOpen={i < 2} />
+      ))}
+    </div>
+  );
+}
+
+function PaymentDay({ label, items, fresh, defaultOpen }: { label: string; items: Payment[]; fresh: Set<string>; defaultOpen: boolean }) {
+  const [open, setOpen] = useState(defaultOpen);
+  const confirmed = items.filter((p) => p.state === "confirmed");
+  const total = useTween(confirmed.reduce((s, p) => s + p.amount, 0));
+  const refused = items.filter((p) => p.state === "refused").reduce((s, p) => s + (p.count ?? 1), 0);
+  return (
+    <div className="animate-fade-in overflow-hidden rounded-xl border border-border">
+      <button onClick={() => setOpen(!open)} className="flex w-full items-center gap-3 bg-surface px-4 py-2.5 text-left hover:bg-surface-2/60">
+        <span className={`text-muted transition-transform ${open ? "rotate-90" : ""}`}>›</span>
+        <span className="text-sm font-semibold">{label}</span>
+        <span className="text-xs text-muted">
+          {confirmed.length} payment{confirmed.length === 1 ? "" : "s"}
+          {refused > 0 && <span className="text-bad"> · {refused} replay{refused === 1 ? "" : "s"} refused</span>}
+        </span>
+        <span className="ml-auto font-mono text-sm font-semibold tabular-nums text-ok">+{(total ?? 0).toFixed(2)} USDC</span>
+      </button>
+      {open && (
+        <div className="grid gap-2 border-t border-border bg-background/60 p-3 sm:grid-cols-2 lg:grid-cols-3">
+          {items.map((p, i) => (
+            <div key={p.key} className="animate-fade-in" style={{ animationDelay: `${Math.min(i * 35, 420)}ms`, animationFillMode: "both" }}>
+              <PaymentCard payment={p} fresh={fresh.has(p.key)} />
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}

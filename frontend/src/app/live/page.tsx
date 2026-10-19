@@ -120,7 +120,14 @@ function buildThread(key: string, sessionId: string | null, wallet: string | nul
   };
   const screened = events.some((e) => e.type === "sanctions_screened" && e.actor === "gateway");
   const receipt = events.some((e) => e.type === "license_receipt_issued");
+  // The seller's own copy of each buyer message; older history only has the buyer's log of it.
+  const sellerHeard = events.some((e) => e.type === "buyer_message_received");
   const hashOf = () => events.map((e) => findHash(e.payload)).find(Boolean) ?? null;
+  const ask = (e: AppEvent, text: string) => {
+    // Several rounds: the latest question replaces the previous one while no answer came in between.
+    const last = t.bubbles.at(-1);
+    put({ key: last?.key.startsWith("ask") ? last.key : `ask${t.bubbles.length}`, side: "buyer", tone: "plain", title: "", quote: clip(text), event: e });
+  };
 
   for (const e of events) {
     const offer = (e.payload.offer ?? {}) as Record<string, unknown>;
@@ -134,16 +141,16 @@ function buildThread(key: string, sessionId: string | null, wallet: string | nul
         put({ key: "verified", side: "seller", tone: "bad", title: "Identity refused", detail: String(e.payload.reason ?? "The signature did not match"), event: e });
         break;
       case "sanctions_blocked":
+        if (e.actor !== "gateway") break;
         t.blocked = true;
         put({ key: "sanctions", side: "seller", tone: "bad", title: "Sanctioned wallet refused", detail: "This wallet is on the US Treasury sanctions list. No sale.", event: e });
         break;
-      case "buyer_message": {
-        const text = String(e.payload.message ?? e.summary ?? "");
-        // Several rounds: the latest question replaces the previous one while no answer came in between.
-        const last = t.bubbles.at(-1);
-        put({ key: last?.key.startsWith("ask") ? last.key : `ask${t.bubbles.length}`, side: "buyer", tone: "plain", title: "", quote: clip(text), event: e });
+      case "buyer_message_received":
+        ask(e, String(e.payload.message ?? e.summary ?? ""));
         break;
-      }
+      case "buyer_message":
+        if (!sellerHeard) ask(e, String(e.payload.message ?? e.summary ?? ""));
+        break;
       case "injection_ignored":
         t.blocked = true;
         put({ key: "injection", side: "seller", tone: "bad", title: "Manipulation attempt blocked", detail: "It asked our agent to break its rules. Nothing revealed, prices unchanged.", event: e });
@@ -157,25 +164,43 @@ function buildThread(key: string, sessionId: string | null, wallet: string | nul
         put({ key: "offer", side: "seller", tone: "plain", title: `${TIER_LABEL[tier] ?? "Offer"} · ${Number(offer.price_usdc ?? 0).toFixed(2)} USDC`, detail: clip(String(what || offer.scope || ""), 110), event: e });
         break;
       }
+      case "sales_message": {
+        // The sales agent's actual reply: attached to its offer, or a message of its own (question, refusal).
+        const text = String(e.payload.message_to_buyer ?? "");
+        const action = String(e.payload.action ?? "");
+        if (!text || !/^Sales agent to buyer/i.test(e.summary)) break;
+        const offerBubble = t.bubbles.find((b) => b.key === "offer");
+        if (action === "propose_offer" && offerBubble) offerBubble.quote = clip(text, 170);
+        else if (action !== "no_match") put({ key: `reply${t.bubbles.length}`, side: "seller", tone: "plain", title: "", quote: clip(text, 170), event: e });
+        break;
+      }
       case "no_match":
         t.noMatch = true;
         put({ key: "nomatch", side: "seller", tone: "plain", title: "We don't have this", detail: "Not in the catalog. No payment.", event: e });
         break;
       case "approval_requested":
-        put({ key: "approval", side: "center", tone: "warn", title: `Owner approval needed · ${approvalOffer(e).price.toFixed(2)} USDC`, detail: "Above what the agent may spend on its own", event: e });
+        // Happens on the buyer's side; shown because the pause it causes is part of the story.
+        put({ key: "approval", side: "center", tone: "warn", title: `Buyer's side · asking its owner for ${approvalOffer(e).price.toFixed(2)} USDC`, detail: "Above what its agent may spend alone", event: e });
         break;
       case "approval_granted":
-        put({ key: "approval", side: "center", tone: "ok", title: "Owner approved ✓", detail: "The human said yes", event: e });
+        put({ key: "approval", side: "center", tone: "ok", title: "Buyer's side · owner approved ✓", detail: "Its human said yes", event: e });
         break;
-      case "payment_required_sent":
-      case "payment_signed":
+      case "offer_accepted":
+        put({ key: "deal", side: "buyer", tone: "plain", title: "Deal, I'll take it.", event: e });
+        break;
+      case "payment_required_sent": {
+        const accepts = (e.payload.accepts ?? []) as Record<string, unknown>[];
+        const payTo = String(accepts[0]?.payTo ?? accepts[0]?.pay_to ?? "");
+        put({ key: "invoice", side: "seller", tone: "plain", title: `Invoice · ${usdcIn(e.summary).toFixed(2)} USDC`, detail: payTo ? `Pay to ${shortHex(payTo)} on the blockchain, nothing is sent before` : "Nothing is sent before payment", event: e });
+        break;
+      }
       case "payment_verified":
-        if (!t.bubbles.some((b) => b.key === "pay" && b.tone === "ok"))
-          put({ key: "pay", side: "buyer", tone: "pending", title: `Paying ${(usdcIn(e.summary) || Number(e.payload.price_usdc ?? 0)).toFixed(2)} USDC…`.replace("Paying 0.00 USDC…", "Paying…"), detail: "Signing the USDC transfer", event: e });
+        put({ key: "signed", side: "buyer", tone: "plain", title: `Here is my signed payment of ${usdcIn(e.summary).toFixed(2)} USDC.`, event: e });
+        if (!t.bubbles.some((b) => b.key === "settled")) put({ key: "settled", side: "center", tone: "pending", title: "Settling on the blockchain…", event: e });
         break;
       case "payment_settled":
         t.amount = usdcIn(e.summary);
-        put({ key: "pay", side: "buyer", tone: "ok", title: `Paid ${t.amount.toFixed(2)} USDC`, detail: "Confirmed on the blockchain", hash: hashOf(), event: e, coin: String(e.payload.offer_id ?? t.offerId ?? "") });
+        put({ key: "settled", side: "center", tone: "ok", title: `${t.amount.toFixed(2)} USDC paid · confirmed on-chain`, hash: hashOf(), event: e, coin: t.offerId ?? "" });
         break;
       case "payment_rejected":
         t.blocked = true;
@@ -189,7 +214,7 @@ function buildThread(key: string, sessionId: string | null, wallet: string | nul
         t.delivered = true;
         t.offerId = String(e.payload.offer_id ?? t.offerId ?? "");
         t.contentId = contentIds(e.payload.content_ids)[0] ?? t.contentId;
-        put({ key: "delivered", side: "seller", tone: "ok", title: "Data sent 📦", detail: receipt ? "Only what was paid for · signed license receipt" : "Only what was paid for", event: e });
+        put({ key: "delivered", side: "seller", tone: "ok", title: "Thanks! Here is your data 📦", detail: receipt ? "Only what was paid for · signed license receipt" : "Only what was paid for", event: e });
         break;
     }
   }
@@ -323,7 +348,7 @@ export default function LiveView() {
     () => events.slice(since).filter((e) => !(!USE_MOCKS && clearedAt && e.ts <= clearedAt) && e.actor !== "publisher"),
     [events, since, clearedAt],
   );
-  const latest = visible.filter((e) => !isNoise(e)).at(-1) ?? null;
+  const latest = visible.filter((e) => !isNoise(e) && e.actor !== "buyer" && e.actor !== "chain").at(-1) ?? null;
   const threads = useMemo(
     () => groupSessions(visible).flatMap((s) => splitPurchases(s, titles)).sort((a, b) => (a.lastTs < b.lastTs ? 1 : -1)),
     [visible, titles],
@@ -375,10 +400,14 @@ export default function LiveView() {
     return visible.findLast((e) => e.type === "approval_requested" && !granted.has(approvalOffer(e).offerId) && !ended(e)) ?? null;
   }, [visible]);
 
-  const finished = useMemo(() => {
-    const lastStart = visible.findLastIndex((e) => e.type === "mission_started");
-    return visible.findLastIndex((e) => e.type === "mission_done") > lastStart;
-  }, [visible]);
+  // The banner tells the latest sale from the seller's side: what was sold, for how much. Never the buyer's budget.
+  const outcome = useMemo(() => {
+    const t = threads[0];
+    if (!t || !(t.delivered || t.blocked || t.noMatch)) return null;
+    if (t.delivered) return { tone: "ok" as const, text: `Sold ${(TIER_LABEL[t.tier ?? ""] ?? "data").toLowerCase()} for ${t.amount.toFixed(2)} USDC, paid to your wallet` };
+    if (t.blocked) return { tone: "bad" as const, text: t.bubbles.findLast((b) => b.tone === "bad")?.title ?? "Blocked" };
+    return { tone: "info" as const, text: "Not in the catalog, no sale" };
+  }, [threads]);
 
   const clear = () => {
     const last = events.reduce((m, e) => (e.ts > m ? e.ts : m), clearedAt || new Date().toISOString());
@@ -443,7 +472,7 @@ export default function LiveView() {
       {(notice || error) && <p className={`animate-fade-in rounded-lg px-3 py-2 text-sm ${error ? "bg-bad/10 text-bad" : "bg-surface-2"}`}>{error ?? notice}</p>}
 
       <div className="grid items-stretch gap-3 md:grid-cols-[1fr_200px_200px]">
-        <NowBanner latest={latest} outcome={finished ? (visible.findLast((e) => e.type === "mission_done") ?? null) : null} />
+        <NowBanner latest={latest} outcome={latest && threads[0] && latest.ts <= threads[0].lastTs ? outcome : null} />
         <div ref={walletRef}>
           <CounterTile label="Your wallet" value={walletBalance} unit="USDC" right={publisherWallet ? <AddressLink address={publisherWallet} /> : null} />
         </div>
@@ -724,10 +753,10 @@ function PayloadDrawer({ event, onClose }: { event: AppEvent; onClose: () => voi
   );
 }
 
-function NowBanner({ latest, outcome }: { latest: AppEvent | null; outcome: AppEvent | null }) {
+function NowBanner({ latest, outcome }: { latest: AppEvent | null; outcome: { tone: "ok" | "bad" | "info"; text: string } | null }) {
   const l = latest ? labelFor(latest.type) : null;
   const current = l ? PHASES.findIndex((p) => p.key === l.phase) : -1;
-  const done = !!outcome;
+  const done = outcome?.tone === "ok";
   return (
     <div className="rounded-xl border border-border bg-surface px-4 py-3 shadow-sm">
       <ol className="flex items-center gap-2">
@@ -750,9 +779,11 @@ function NowBanner({ latest, outcome }: { latest: AppEvent | null; outcome: AppE
       </ol>
       <div className="mt-2.5 truncate text-sm">
         {outcome ? (
-          <span className="animate-fade-in" key={`done${String(outcome.event_id)}`}>
-            <span className="font-medium text-ok">✓ Done · </span>
-            <span>{outcome.summary.replace(/0x[0-9a-fA-F]{40,64}/g, (h) => `${h.slice(0, 6)}…${h.slice(-4)}`)}</span>
+          <span className="animate-fade-in" key={outcome.text}>
+            <span className={`font-medium ${outcome.tone === "ok" ? "text-ok" : outcome.tone === "bad" ? "text-bad" : "text-muted"}`}>
+              {outcome.tone === "ok" ? "✓ Sold · " : outcome.tone === "bad" ? "⛔ Blocked · " : "No sale · "}
+            </span>
+            <span>{outcome.tone === "ok" ? outcome.text.replace(/^Sold /, "") : outcome.text}</span>
           </span>
         ) : l ? (
           <span className="animate-fade-in" key={String(latest?.event_id)}>

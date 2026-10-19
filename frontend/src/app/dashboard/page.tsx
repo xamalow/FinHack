@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { PaymentCard, paymentsOf } from "@/components/payments";
+import { PaymentDays, paymentsOf, useTween } from "@/components/payments";
 import { AddressLink, Card, TxLink, atomicToUsdc, toDate, usdc } from "@/components/ui";
 import * as api from "@/lib/api";
 import { CHAIN_NAME } from "@/lib/config";
@@ -116,31 +116,20 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      <Card
-        title="Blockchain"
-        subtitle={`Public record of every payment on ${CHAIN_NAME}, with refused replays`}
-        right={
-          <span className="text-xs tabular-nums text-muted">
-            {payments.filter((p) => p.state === "confirmed").length} received ·{" "}
-            {payments
-              .filter((p) => p.state === "confirmed")
-              .reduce((s, p) => s + p.amount, 0)
-              .toFixed(2)}{" "}
-            USDC
-          </span>
-        }
-      >
-        {payments.length ? (
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-            {payments.map((p) => (
-              <PaymentCard key={p.key} payment={p} fresh={fresh.has(p.key)} />
-            ))}
-          </div>
-        ) : (
-          <p className="text-sm text-muted">No payment yet.</p>
-        )}
+      <Card title="Blockchain" subtitle={`Public record of every payment on ${CHAIN_NAME}, grouped by day, with refused replays`} right={<ChainTotal payments={payments} />}>
+        {payments.length ? <PaymentDays payments={payments} fresh={fresh} /> : <p className="text-sm text-muted">No payment yet.</p>}
       </Card>
     </div>
+  );
+}
+
+function ChainTotal({ payments }: { payments: ReturnType<typeof paymentsOf> }) {
+  const confirmed = payments.filter((p) => p.state === "confirmed");
+  const total = useTween(confirmed.reduce((s, p) => s + p.amount, 0));
+  return (
+    <span className="text-xs tabular-nums text-muted">
+      {confirmed.length} received · <span className="font-mono font-semibold text-ok">{(total ?? 0).toFixed(2)} USDC</span>
+    </span>
   );
 }
 

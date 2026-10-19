@@ -27,6 +27,7 @@ EVENT_TYPES: dict[str, set[str]] = {
         "payment_required_sent", "payment_verified", "payment_settled", "payment_rejected",
         "replay_rejected", "content_delivered", "receipt_redownload",
         "sanctions_screened", "sanctions_blocked", "license_receipt_issued", "personal_data_purged",
+        "buyer_message_received",
     },
     "sales_agent": {"sales_message", "offer_proposed", "no_match", "injection_ignored"},
     "buyer": {
