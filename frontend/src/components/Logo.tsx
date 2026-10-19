@@ -1,19 +1,31 @@
-// Doubloon: a coin in the site's accent blue with a white D, next to the wordmark.
-// Same geometry as public/brand/doubloon-mark.svg (high-resolution files in public/brand).
+// Doubloon: a geometric D whose counter is a coin, in the accent blue gradient (blue-500 → #2563eb → blue-700).
+// Same shape as public/brand/doubloon-mark.svg; high-resolution files and the app icon are in public/brand.
+import { useId } from "react";
+
 export function CoinMark({ size = 22 }: { size?: number }) {
+  const id = useId();
   return (
-    <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden="true">
-      <circle cx="16" cy="16" r="16" fill="var(--accent)" />
-      <circle cx="16" cy="16" r="13.1" fill="none" stroke="#fff" strokeOpacity="0.28" strokeWidth="0.9" />
-      <path d="M10.4 8.5H14.9A7.5 7.5 0 0 1 14.9 23.5H10.4ZM13.4 11.5H14.9A4.5 4.5 0 0 1 14.9 20.5H13.4Z" fill="#fff" fillRule="evenodd" />
+    <svg width={size} height={size} viewBox="0 0 14 14" aria-hidden="true">
+      <defs>
+        <linearGradient id={id} x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="#3b82f6" />
+          <stop offset="0.5" stopColor="var(--accent)" />
+          <stop offset="1" stopColor="#1d4ed8" />
+        </linearGradient>
+      </defs>
+      <path
+        d="M1.4 0H7A7 7 0 0 1 7 14H1.4A1.4 1.4 0 0 1 0 12.6V1.4A1.4 1.4 0 0 1 1.4 0ZM10.4 7A3.4 3.4 0 1 0 3.6 7A3.4 3.4 0 1 0 10.4 7Z"
+        fill={`url(#${id})`}
+        fillRule="evenodd"
+      />
     </svg>
   );
 }
 
 export function Logo() {
   return (
-    <span className="flex items-center gap-2 font-semibold tracking-tight">
-      <CoinMark />
+    <span className="flex items-center gap-2 text-[17px] font-semibold tracking-[-0.035em]">
+      <CoinMark size={20} />
       <span>Doubloon</span>
     </span>
   );
