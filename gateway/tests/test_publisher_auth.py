@@ -43,6 +43,14 @@ def test_owner_token_allows_a_remote_owner(monkeypatch, remote):
     assert r.status_code == 200
 
 
+def test_preview_is_owner_only(remote, client):
+    path = "/publisher/catalog/rpt_battery_2025%23s2/preview"
+    assert remote.get(path).status_code == 403
+    r = client.get(path)
+    assert r.status_code == 200 and r.json()["text"]
+    assert client.get("/publisher/catalog/nope%23s9/preview").status_code == 404
+
+
 def test_reads_stay_public(remote):
     assert remote.get("/publisher/catalog").status_code == 200
 

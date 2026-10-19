@@ -16,6 +16,7 @@ export interface CatalogItem {
   sensitivity: string;
   status: CatalogStatus;
   suggested_tier: TierName | null; // null for free and excluded items
+  source_url?: string | null; // page or PDF the item was scanned from (publisher review only)
 }
 
 export interface Tier {

@@ -50,6 +50,14 @@ export const mockCatalog: CatalogItem[] = [
   item("page_internal_notes", 1, "Internal notes", "Analyst working notes", "internal", ["notes"], "full_section", "sellable", "sensitive"),
 ];
 
+// Mock preview text for the Content step. Invented figures, like everything in this file.
+export const mockPreviewText = (c: CatalogItem): string =>
+  `${c.title}\n${c.section}\n\n` +
+  `This section covers ${c.topic} in ${c.region} for ${c.period}. ` +
+  `European lithium-ion cell output reached 235.6 GWh in 2025, up 18.7% year on year. ` +
+  `The five largest manufacturers held 88.9% of European output.\n\n` +
+  `(Mock text: set NEXT_PUBLIC_GATEWAY_URL to read the real section.)`;
+
 export const mockRulesText = `Free: tell agents what topics and time periods we cover, never any number.
 $0.10: one single figure (one company, one metric, one year).
 $0.50: a small table (up to 5 companies or 5 years on one metric).

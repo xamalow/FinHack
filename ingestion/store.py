@@ -3,6 +3,7 @@
 Public API used by the other roles:
     get_catalog(status=None) -> list[dict]       metadata only, never raw text
     get_content(content_ids) -> dict[id, text]   refuses excluded or unknown ids
+    get_preview_text(content_id) -> str | None   owner preview, excluded included
 """
 import json
 from contextlib import closing
@@ -31,6 +32,10 @@ CREATE TABLE IF NOT EXISTS content (
     content_id TEXT PRIMARY KEY,
     raw_text   TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS catalog_sources (
+    content_id TEXT PRIMARY KEY,
+    url        TEXT NOT NULL
+);
 """
 
 CATALOG_FIELDS = (
@@ -55,10 +60,11 @@ def _row_to_item(row):
     return item
 
 
-def replace_catalog(items, contents):
+def replace_catalog(items, contents, sources=None):
     """Store a fresh scan. A status already chosen by the publisher for a
     content_id that still exists is kept, so a rescan never re-exposes an
-    item the publisher excluded."""
+    item the publisher excluded. sources: {content_id: page or PDF url},
+    shown to the publisher only (never to the Sales agent or to agents)."""
     init_db()
     with closing(get_connection()) as conn:
         previous = {r["content_id"]: r["status"] for r in conn.execute("SELECT content_id, status FROM catalog")}
@@ -77,8 +83,19 @@ def replace_catalog(items, contents):
             "INSERT INTO content (content_id, raw_text) VALUES (?, ?)",
             [(cid, text) for cid, text in contents.items()],
         )
+        if sources is not None:
+            conn.execute("DELETE FROM catalog_sources")
+            conn.executemany("INSERT INTO catalog_sources (content_id, url) VALUES (?, ?)",
+                             [(cid, url) for cid, url in sources.items() if url])
         conn.commit()
     _invalidate_leak_index()
+
+
+def get_sources():
+    """{content_id: url} of the page or PDF each item was scanned from. Publisher view only."""
+    init_db()
+    with closing(get_connection()) as conn:
+        return {r["content_id"]: r["url"] for r in conn.execute("SELECT content_id, url FROM catalog_sources")}
 
 
 def load_mock_catalog():
@@ -142,6 +159,16 @@ def get_content(content_ids):
     if missing:
         raise ContentNotAvailable(f"unknown content: {missing}")
     return {i: found[i]["raw_text"] for i in ids}
+
+
+def get_preview_text(content_id):
+    """Raw text of one item for the publisher's own preview (owner-only route).
+    Unlike get_content, excluded items are returned: the publisher reads its
+    own pages here, nothing is delivered to an agent. None if no text is stored."""
+    init_db()
+    with closing(get_connection()) as conn:
+        row = conn.execute("SELECT raw_text FROM content WHERE content_id = ?", (content_id,)).fetchone()
+    return row["raw_text"] if row else None
 
 
 def get_texts_by_status():

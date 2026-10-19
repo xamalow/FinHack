@@ -334,7 +334,7 @@ def run_scan(url):
         )
 
         writer = MetadataWriter()
-        items, contents = {}, {}
+        items, contents, sources = {}, {}, {}
 
         def describe(p):
             meta = writer.describe(p["title"], p["section"], p["text"], p["url"])
@@ -347,12 +347,13 @@ def run_scan(url):
                 item, leaked = finalize_item(p, meta, index)
                 items[item["content_id"]] = item
                 contents[item["content_id"]] = p["text"]
+                sources[item["content_id"]] = p["url"]
                 flag = " (flagged internal, excluded)" if item["sensitivity"] == "internal" else ""
                 log_event(None, "publisher", "scan_indexing", f"Indexed {item['title']}, {item['section']}{flag}",
                           {"item": item, "metadata_source": source, "redacted_fields": leaked, "url": p["url"]})
 
         ordered = [items[k] for k in sorted(items)]
-        store.replace_catalog(ordered, contents)
+        store.replace_catalog(ordered, contents, sources)
         catalog = store.get_catalog()
         counts = Counter(i["status"] for i in catalog)
         summary = {

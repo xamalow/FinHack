@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAccount, useConnect, useDisconnect, useSwitchChain } from "wagmi";
 import { CHAIN } from "@/app/providers";
 import { CHAIN_NAME } from "@/lib/config";
@@ -242,6 +242,7 @@ const isInternal = (c: CatalogItem) => c.sensitivity === "internal" || c.sensiti
 
 function CatalogStep({ catalog, setCatalog, onNext }: { catalog: CatalogItem[]; setCatalog: (c: CatalogItem[]) => void; onNext: () => void }) {
   const [error, setError] = useState<string | null>(null);
+  const [previewId, setPreviewId] = useState<string | null>(null);
   const setStatus = async (id: string, status: CatalogStatus) => {
     const before = catalog;
     setError(null);
@@ -277,25 +278,26 @@ function CatalogStep({ catalog, setCatalog, onNext }: { catalog: CatalogItem[]; 
       <div className="space-y-3">
         {reports.map((sections) => (
           <Card key={sections[0].report_id}>
-            <div className="mb-2 text-sm font-semibold">📄 {sections[0].title}</div>
+            <ArticleTitle sections={sections} />
             <div className="divide-y divide-border">
               {sections.map((c) => (
-                <div key={c.content_id} className="flex items-center gap-3 py-2">
-                  <span className="min-w-0 flex-1 truncate text-sm">
-                    {c.section}
-                    {isInternal(c) && <span className="ml-2 rounded-full bg-warn/15 px-2 py-0.5 text-xs text-warn">internal</span>}
-                  </span>
-                  <div className="inline-flex shrink-0 overflow-hidden rounded-lg border border-border text-xs">
-                    {STATUS_OPTIONS.map((o) => (
-                      <button
-                        key={o.key}
-                        onClick={() => setStatus(c.content_id, o.key)}
-                        className={`px-3 py-1.5 font-medium transition ${c.status === o.key ? o.active : "text-muted hover:bg-surface-2"}`}
-                      >
-                        {o.label}
-                      </button>
-                    ))}
-                  </div>
+                <div key={c.content_id} className={`group flex items-center gap-3 py-2 ${previewId === c.content_id ? "rounded-md bg-accent/5" : ""}`}>
+                  <button
+                    onClick={() => setPreviewId(c.content_id)}
+                    title="Preview this section"
+                    className="flex min-w-0 flex-1 items-center gap-2 text-left text-sm"
+                  >
+                    <span className="truncate group-hover:text-accent">{c.section}</span>
+                    {isInternal(c) && <span className="shrink-0 rounded-full bg-warn/15 px-2 py-0.5 text-xs text-warn">internal</span>}
+                    <span
+                      className={`grid size-6 shrink-0 place-items-center rounded-md transition ${
+                        previewId === c.content_id ? "bg-accent/10 text-accent" : "text-muted/60 group-hover:bg-surface-2 group-hover:text-accent"
+                      }`}
+                    >
+                      <EyeIcon />
+                    </span>
+                  </button>
+                  <StatusToggle value={c.status} onChange={(s) => setStatus(c.content_id, s)} />
                 </div>
               ))}
             </div>
@@ -306,7 +308,236 @@ function CatalogStep({ catalog, setCatalog, onNext }: { catalog: CatalogItem[]; 
       <div className="mt-5 flex justify-end">
         <Button onClick={onNext}>Continue</Button>
       </div>
+
+      {previewId && (
+        <PreviewDrawer
+          items={reports.flat()}
+          id={previewId}
+          onMove={setPreviewId}
+          onStatus={setStatus}
+          onClose={() => setPreviewId(null)}
+        />
+      )}
     </>
+  );
+}
+
+// The page an article was scanned from: its free HTML page when there is one, else the PDF.
+function articleUrls(sections: CatalogItem[]): { page: string | null; pdf: string | null } {
+  const urls = sections.map((s) => s.source_url).filter((u): u is string => !!u);
+  return { page: urls.find((u) => !/\.pdf($|\?)/i.test(u)) ?? null, pdf: urls.find((u) => /\.pdf($|\?)/i.test(u)) ?? null };
+}
+
+// Report title with a hover card: a live miniature of the real page, its address and links. Takes no room in the list.
+function ArticleTitle({ sections }: { sections: CatalogItem[] }) {
+  const [open, setOpen] = useState(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { page, pdf } = articleUrls(sections);
+  const url = page ?? pdf;
+  const show = (on: boolean) => {
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(() => setOpen(on), on ? 250 : 150);
+  };
+  const title = sections.find((s) => s.section !== "Free article")?.title ?? sections[0].title;
+  const sellable = sections.filter((s) => s.status === "sellable").length;
+  if (!url) return <div className="mb-2 text-sm font-semibold">📄 {title}</div>;
+  const short = url.replace(/^https?:\/\//, "");
+
+  return (
+    <div className="relative mb-2" onMouseEnter={() => show(true)} onMouseLeave={() => show(false)}>
+      <a
+        href={url}
+        target="_blank"
+        rel="noreferrer"
+        onFocus={() => show(true)}
+        onBlur={() => show(false)}
+        className="group inline-flex max-w-full items-center gap-1.5 text-sm font-semibold hover:text-accent"
+      >
+        <span className="truncate">📄 {title}</span>
+        <span className="text-muted/60 transition group-hover:text-accent" aria-hidden="true">↗</span>
+      </a>
+      {open && (
+        <div className="animate-fade-in absolute left-0 top-full z-30 mt-2 w-[300px] overflow-hidden rounded-xl border border-border bg-surface shadow-xl">
+          <div className="relative h-[170px] overflow-hidden border-b border-border bg-surface-2">
+            {page ? (
+              <iframe
+                src={page}
+                title={`Preview of ${title}`}
+                loading="lazy"
+                tabIndex={-1}
+                sandbox=""
+                className="pointer-events-none absolute left-0 top-0 h-[773px] w-[1364px] origin-top-left scale-[0.22]"
+              />
+            ) : (
+              <div className="grid h-full place-items-center text-4xl">📄</div>
+            )}
+          </div>
+          <div className="space-y-1 p-3">
+            <div className="line-clamp-2 text-sm font-semibold leading-snug">{title}</div>
+            <div className="truncate text-xs text-muted">{short}</div>
+            <div className="flex items-center justify-between pt-1 text-xs">
+              <span className="text-muted">
+                {sections.length} section{sections.length > 1 ? "s" : ""} · {sellable} for sale
+              </span>
+              <span className="flex gap-3">
+                {page && (
+                  <a href={page} target="_blank" rel="noreferrer" className="font-medium text-accent hover:underline">
+                    Article ↗
+                  </a>
+                )}
+                {pdf && (
+                  <a href={pdf} target="_blank" rel="noreferrer" className="font-medium text-accent hover:underline">
+                    PDF ↗
+                  </a>
+                )}
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function StatusToggle({ value, onChange }: { value: CatalogStatus; onChange: (s: CatalogStatus) => void }) {
+  return (
+    <div className="inline-flex shrink-0 overflow-hidden rounded-lg border border-border text-xs">
+      {STATUS_OPTIONS.map((o) => (
+        <button
+          key={o.key}
+          onClick={() => onChange(o.key)}
+          className={`px-3 py-1.5 font-medium transition ${value === o.key ? o.active : "text-muted hover:bg-surface-2"}`}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function EyeIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  );
+}
+
+// Figures are what agents pay for: the preview marks them so the publisher sees what stays behind the paywall.
+function withFigures(text: string) {
+  return text.split(/(\d+(?:[.,]\d+)*(?:\s?(?:%|GWh|MWh|GW|USD|EUR|€|bn)\b|%)?)/g).map((part, i) =>
+    i % 2 && !/^(19|20)\d\d$/.test(part) ? (
+      <mark key={i} className="rounded bg-accent/10 px-0.5 font-medium text-foreground">
+        {part}
+      </mark>
+    ) : (
+      part
+    ),
+  );
+}
+
+type Preview = { text: string } | { error: string } | null;
+
+function PreviewDrawer({
+  items,
+  id,
+  onMove,
+  onStatus,
+  onClose,
+}: {
+  items: CatalogItem[];
+  id: string;
+  onMove: (id: string) => void;
+  onStatus: (id: string, s: CatalogStatus) => void;
+  onClose: () => void;
+}) {
+  const [previews, setPreviews] = useState<Record<string, Preview>>({});
+  const index = items.findIndex((c) => c.content_id === id);
+  const item = items[index];
+  const preview = previews[id] ?? null;
+
+  useEffect(() => {
+    if (id in previews) return;
+    let alive = true;
+    api.getPreview(id).then(
+      (p) => alive && setPreviews((m) => ({ ...m, [id]: { text: p.text } })),
+      () => alive && setPreviews((m) => ({ ...m, [id]: { error: "No text stored for this section yet. Run a scan first." } })),
+    );
+    return () => {
+      alive = false;
+    };
+  }, [id, previews]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+      if (e.key === "ArrowDown" && index < items.length - 1) onMove(items[index + 1].content_id);
+      if (e.key === "ArrowUp" && index > 0) onMove(items[index - 1].content_id);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [index, items, onMove, onClose]);
+
+  if (!item) return null;
+  const meta = [item.topic, item.region, item.period].filter(Boolean).join(" · ");
+  return (
+    <div className="animate-fade-in fixed inset-0 z-50 flex justify-end bg-black/20" onClick={onClose}>
+      <aside
+        className="animate-slide-in flex h-full w-full max-w-lg flex-col border-l border-border bg-surface shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <header className="flex items-start gap-3 border-b border-border px-5 py-4">
+          <div className="min-w-0 flex-1">
+            <div className="truncate text-xs text-muted">📄 {item.title}</div>
+            <h2 className="mt-0.5 text-lg font-semibold leading-snug">{item.section}</h2>
+            {meta && <div className="mt-1 text-xs text-muted">{meta}</div>}
+          </div>
+          <div className="flex shrink-0 items-center gap-1 text-muted">
+            <button
+              onClick={() => index > 0 && onMove(items[index - 1].content_id)}
+              disabled={index <= 0}
+              title="Previous (↑)"
+              className="grid size-7 place-items-center rounded-md hover:bg-surface-2 disabled:opacity-30"
+            >
+              ↑
+            </button>
+            <button
+              onClick={() => index < items.length - 1 && onMove(items[index + 1].content_id)}
+              disabled={index >= items.length - 1}
+              title="Next (↓)"
+              className="grid size-7 place-items-center rounded-md hover:bg-surface-2 disabled:opacity-30"
+            >
+              ↓
+            </button>
+            <button onClick={onClose} title="Close (Esc)" className="grid size-7 place-items-center rounded-md hover:bg-surface-2 hover:text-foreground">
+              ✕
+            </button>
+          </div>
+        </header>
+
+        <div className="flex-1 overflow-y-auto px-5 py-4">
+          {preview === null ? (
+            <div className="space-y-2.5">
+              {[92, 100, 85, 97, 60].map((w, i) => (
+                <div key={i} className="h-3 animate-pulse rounded bg-surface-2" style={{ width: `${w}%` }} />
+              ))}
+            </div>
+          ) : "error" in preview ? (
+            <p className="text-sm text-muted">{preview.error}</p>
+          ) : (
+            <div key={id} className="animate-fade-in whitespace-pre-wrap text-[14px] leading-relaxed text-foreground/85">
+              {withFigures(preview.text)}
+            </div>
+          )}
+        </div>
+
+        <footer className="flex items-center justify-between gap-3 border-t border-border px-5 py-3">
+          <span className="text-xs text-muted">Only you see this. Agents see the title until they pay.</span>
+          <StatusToggle value={item.status} onChange={(s) => onStatus(item.content_id, s)} />
+        </footer>
+      </aside>
+    </div>
   );
 }
 

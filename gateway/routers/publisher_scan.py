@@ -3,6 +3,7 @@
 POST  /publisher/scan                   crawl a URL and build the catalog
 GET   /publisher/catalog                full catalog with statuses
 PATCH /publisher/catalog/{content_id}   set sellable, free or excluded
+GET   /publisher/catalog/{content_id}/preview   raw text, owner only
 
 content_ids contain "#", so clients must URL-encode them in the path
 (encodeURIComponent("rpt_battery_2025#s2") -> rpt_battery_2025%23s2).
@@ -60,7 +61,22 @@ def scan(req: ScanRequest, background_tasks: BackgroundTasks):
 
 @router.get("/catalog")
 def get_catalog():
-    return store.get_catalog()
+    # source_url is added here only: it is for the publisher's review screen, never in the Sales agent's view
+    sources = store.get_sources()
+    return [{**item, "source_url": sources.get(item["content_id"])} for item in store.get_catalog()]
+
+
+@router.get("/catalog/{content_id}/preview", dependencies=[Depends(publisher_only)])
+def preview_catalog_item(content_id: str):
+    """The publisher reads one of its own sections before deciding what to sell. Owner only:
+    the text holds the figures agents pay for."""
+    item = store.get_catalog_item(content_id)
+    if item is None:
+        raise HTTPException(404, f"unknown content_id {content_id}")
+    text = store.get_preview_text(content_id)
+    if text is None:
+        raise HTTPException(404, f"no text stored for {content_id}")
+    return {"content_id": content_id, "title": item["title"], "section": item["section"], "text": text}
 
 
 @router.patch("/catalog/{content_id}", dependencies=[Depends(publisher_only)])

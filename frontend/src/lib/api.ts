@@ -8,6 +8,7 @@ import {
   mockAudit,
   mockCatalog,
   mockManifest,
+  mockPreviewText,
   mockStats,
   mockTiers,
   mockTransactions,
@@ -80,6 +81,17 @@ export async function setCatalogStatus(contentId: string, status: CatalogStatus)
     return;
   }
   await http("PATCH", `/publisher/catalog/${encodeURIComponent(contentId)}`, { status });
+}
+
+// The publisher's own preview of one section (owner only on the gateway: the text holds the paid figures).
+export async function getPreview(contentId: string): Promise<{ content_id: string; title: string; section: string; text: string }> {
+  if (USE_MOCKS) {
+    await new Promise((r) => setTimeout(r, 250));
+    const it = mock.catalog.find((c) => c.content_id === contentId);
+    if (!it) throw new Error(`unknown content_id ${contentId}`);
+    return { content_id: contentId, title: it.title, section: it.section, text: mockPreviewText(it) };
+  }
+  return http("GET", `/publisher/catalog/${encodeURIComponent(contentId)}/preview`);
 }
 
 export async function putRules(rawText: string): Promise<Tier[]> {

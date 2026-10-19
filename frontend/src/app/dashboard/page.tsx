@@ -1,15 +1,41 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { PaymentCard, paymentsOf } from "@/components/payments";
 import { AddressLink, Card, TxLink, atomicToUsdc, toDate, usdc } from "@/components/ui";
 import * as api from "@/lib/api";
+import { CHAIN_NAME } from "@/lib/config";
 import type { Audit, PublisherStats, Transaction } from "@/lib/types";
+import { useEventStream } from "@/lib/useEventStream";
 
 export default function Dashboard() {
   const [stats, setStats] = useState<PublisherStats | null>(null);
   const [txs, setTxs] = useState<Transaction[]>([]);
   const [audit, setAudit] = useState<Audit | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [now, setNow] = useState(() => Date.now());
+  const { events } = useEventStream(undefined, 0);
+  const payments = useMemo(() => paymentsOf(txs, events, now), [txs, events, now]);
+
+  // Payments that arrive while the page is open play the coin animation, not the history on load.
+  const seen = useRef<Set<string> | null>(null);
+  const [fresh, setFresh] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    const keys = payments.map((p) => p.key);
+    if (seen.current === null) {
+      if (txs.length) seen.current = new Set(keys);
+      return;
+    }
+    const added = keys.filter((k) => !seen.current!.has(k));
+    if (!added.length) return;
+    added.forEach((k) => seen.current!.add(k));
+    setFresh((f) => new Set([...f, ...added]));
+  }, [payments, txs.length]);
+
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 2000);
+    return () => clearInterval(t);
+  }, []);
 
   useEffect(() => {
     const load = () =>
@@ -89,6 +115,31 @@ export default function Dashboard() {
           {!audit ? <p className="text-sm text-muted">Select a transaction.</p> : <AuditView audit={audit} />}
         </Card>
       </div>
+
+      <Card
+        title="Blockchain"
+        subtitle={`Public record of every payment on ${CHAIN_NAME}, with refused replays`}
+        right={
+          <span className="text-xs tabular-nums text-muted">
+            {payments.filter((p) => p.state === "confirmed").length} received ·{" "}
+            {payments
+              .filter((p) => p.state === "confirmed")
+              .reduce((s, p) => s + p.amount, 0)
+              .toFixed(2)}{" "}
+            USDC
+          </span>
+        }
+      >
+        {payments.length ? (
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+            {payments.map((p) => (
+              <PaymentCard key={p.key} payment={p} fresh={fresh.has(p.key)} />
+            ))}
+          </div>
+        ) : (
+          <p className="text-sm text-muted">No payment yet.</p>
+        )}
+      </Card>
     </div>
   );
 }
