@@ -1,3 +1,5 @@
+# Submission documents are shared privately
+docs/pdf/
 # Secrets
 .env
 .env.*
