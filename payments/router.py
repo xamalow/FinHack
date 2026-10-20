@@ -346,4 +346,9 @@ async def balance(address: str):
 
 @router.get("/publisher/stats", dependencies=[Depends(publisher_only)])
 async def publisher_stats():
-    return {"publisher_wallet": deps.get_publisher_wallet(), **store.stats()}
+    # Before Go live there is no payout wallet yet: the dashboard still shows its (empty) stats.
+    try:
+        wallet = deps.get_publisher_wallet()
+    except RuntimeError:
+        wallet = None
+    return {"publisher_wallet": wallet, **store.stats()}

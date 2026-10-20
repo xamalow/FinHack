@@ -20,6 +20,10 @@ os.environ["ANTHROPIC_API_KEY"] = "test-key"
 @pytest.fixture(autouse=True)
 def fresh_db(tmp_path, monkeypatch):
     monkeypatch.setenv("DB_PATH", str(tmp_path / "test.db"))
+    # shared.config may already be imported by another suite (bare `pytest` from the repo root),
+    # so the env var above is not enough: pin the value the gateway actually reads.
+    from shared import config
+    monkeypatch.setattr(config, "DEMO_SITE_URL", os.environ["DEMO_SITE_URL"])
     from shared import db
     db.init_db()
     seed_mock_catalog()
