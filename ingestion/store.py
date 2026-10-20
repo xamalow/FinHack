@@ -1,4 +1,4 @@
-"""Catalog and content tables (owned by P1, section 6.1 of agent.md).
+"""Catalog and content tables (owned by P1).
 
 Public API used by the other roles:
     get_catalog(status=None) -> list[dict]       metadata only, never raw text

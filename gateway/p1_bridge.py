@@ -4,7 +4,7 @@ P2 consumes them but does not own them. Until P1's `ingestion` package exports
 them, this module falls back to the `catalog` / `content` tables, then to
 `mock_catalog.json`, so the gateway runs end to end with mock data.
 
-P1 interface (agent.md section 8, P1 "Exposes"):
+P1 interface:
 
     from ingestion.store import get_catalog, get_content
     from ingestion.leak_filter import contains_paid_figures

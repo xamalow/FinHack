@@ -1,4 +1,4 @@
-"""Shared data contracts (agent.md section 6). Owned by P2.
+"""Shared data contracts. Owned by P2.
 
 Every role codes against these models. Propose changes to P2, do not edit
 them in another branch.
@@ -181,7 +181,7 @@ class OfferDraft(BaseModel):
 
 
 class SalesAgentOutput(BaseModel):
-    """Structured LLM output of the Sales agent (agent.md section 8, P2)."""
+    """Structured LLM output of the Sales agent."""
 
     model_config = ConfigDict(extra="forbid")
 

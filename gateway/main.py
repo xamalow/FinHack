@@ -1,4 +1,4 @@
-"""Gateway entry point. One FastAPI app for every role's routers (agent.md section 3).
+"""Gateway entry point. One FastAPI app for every role's routers.
 
 Run from the repo root:  uvicorn gateway.main:app --reload --port 8000
 """

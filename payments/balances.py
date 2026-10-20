@@ -1,4 +1,4 @@
-"""On-chain USDC balances (agent.md P3 item 6).
+"""On-chain USDC balances.
 
 read_balance() calls balanceOf on the USDC contract. watch() polls the buyer and
 publisher wallets of a session every 2 seconds and emits chain/balance_changed

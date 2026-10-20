@@ -1,4 +1,4 @@
-"""POST /buyer/run, POST /buyer/approve, GET /buyer/runs/{run_id} (agent.md 6.5, P3).
+"""POST /buyer/run, POST /buyer/approve, GET /buyer/runs/{run_id} (P3).
 
 The buyer agent lives in /buyer-agent and only talks HTTP to the gateway.
 This router starts it in the background and relays human approvals.
