@@ -30,9 +30,10 @@ Every sale runs on **x402**, the open protocol that finally puts HTTP's `402 Pay
 5. [Security and compliance](#security-and-compliance)
 6. [The demo](#the-demo)
 7. [Use your own Claude as a buyer](#use-your-own-claude-as-a-buyer)
-8. [Run it locally](#run-it-locally)
-9. [Repository map and tech stack](#repository-map-and-tech-stack)
-10. [Limits and roadmap](#limits-and-roadmap)
+8. [Deployment](#deployment)
+9. [Test cases](#test-cases)
+10. [Repository map and tech stack](#repository-map-and-tech-stack)
+11. [Limits and roadmap](#limits-and-roadmap)
 
 ---
 
@@ -182,9 +183,11 @@ Money is never left to the LLM: only offers the sales agent really made can be b
 
 ---
 
-## Run it locally
+## Deployment
 
-Requirements: Python 3.11+, Node 20+, an Anthropic API key, and test USDC on Base Sepolia for the buyer wallets ([faucet.circle.com](https://faucet.circle.com)).
+### 1. Local deployment (what the demo runs)
+
+Requirements: Python 3.11+ (a native build for your CPU), Node 20+, an Anthropic API key, and test USDC on Base Sepolia for the buyer wallets ([faucet.circle.com](https://faucet.circle.com)).
 
 ```bash
 # 1. Backend
@@ -208,17 +211,68 @@ NEXT_PUBLIC_GATEWAY_URL=http://localhost:8000 npm run dev   # http://localhost:3
 ```
 
 - Without `NEXT_PUBLIC_GATEWAY_URL`, the web app runs on built-in mock data, with a "mock data" badge in the navigation.
-- Base mainnet with real USDC: create `.env.mainnet` and prefix commands with `scripts/mainnet.sh` (see its header).
 - Interactive API docs of the running gateway: http://localhost:8000/docs.
+- To let your own Claude buy, add the connector to Claude Desktop or Claude Code: [buyer-mcp/README.md](buyer-mcp/README.md).
 
-### Tests
+### 2. Base mainnet, real USDC
+
+Same code, configuration only. Create `.env.mainnet` with the mainnet values below and dedicated mainnet wallets (`scripts/create_wallets.py --env-file .env.mainnet --buyers 1`), then prefix every command with `scripts/mainnet.sh`, for example `scripts/mainnet.sh .venv/bin/uvicorn gateway.main:app --port 8000`.
+
+| Setting | Testnet (default `.env`) | Mainnet (`.env.mainnet`) |
+| --- | --- | --- |
+| `NETWORK` | `eip155:84532` (Base Sepolia) | `eip155:8453` (Base) |
+| `USDC_ADDRESS` | `0x036CbD53842c5426634e7929541eC2318f3dCF7e` | `0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913` |
+| `FACILITATOR_URL` | `https://x402.org/facilitator` | `https://facilitator.payai.network` |
+| `RPC_URL`, `EXPLORER_URL` | `https://sepolia.base.org`, `https://sepolia.basescan.org` | a Base mainnet RPC, `https://basescan.org` |
+
+Sanctions screening fails closed on mainnet: keep `SANCTIONS_RPC_URL` pointing to a working Ethereum mainnet RPC.
+
+### 3. Hosted deployment
+
+| Component | Where | How |
+| --- | --- | --- |
+| Publisher site | Vercel | `python site-demo/deploy.py --gateway <public agent URL>` with `VERCEL_TOKEN` in `.env`. It deploys `site-demo/public` and proxies `/.well-known/ai-data.json` to the gateway |
+| Gateway | A server or container you control | `uvicorn gateway.main:app --host 0.0.0.0 --port 8000` behind HTTPS, with its `.env`, its keystores and a persistent `DB_PATH` |
+| Web app | The publisher's machine, next to the gateway | `npm run build && npm start` with `NEXT_PUBLIC_GATEWAY_URL` set to the gateway |
+
+What changes when the gateway is reachable from the internet:
+
+- **Only the agent routes should be public**: `/.well-known/ai-data.json`, `/discover`, `/kya/*`, `/session/message`, `/offer/accept`, `/query/*`, `/receipt/*`. Put a reverse proxy in front that forwards these and nothing else.
+- **Owner routes stay private.** Publisher setup, dashboards, live events and buyer controls accept a caller on the gateway's machine, or the `X-Owner-Token` header matching `PUBLISHER_OWNER_TOKEN` or `BUYER_OWNER_TOKEN`. Set both tokens on a hosted gateway. The web app does not send these tokens, so run it on the gateway's machine.
+- **Set** `GATEWAY_PUBLIC_URL` to the public agent URL (the manifest sends agents there), `CORS_ORIGINS` to the web app's origin, and a strong `JWT_SECRET`.
+
+---
+
+## Test cases
+
+160 automated tests, all passing on a clean checkout, with no API key and no funded wallet:
 
 ```bash
 .venv/bin/python -m pytest gateway/tests ingestion/tests payments/tests buyer-agent buyer-mcp/tests -q
 cd frontend && npx tsc --noEmit && npm run lint
 ```
 
-The gateway tests replace the LLM with scripted outputs, so they need no API key. End-to-end scripts that run against a live gateway and the chain are listed in [payments/docs/PAYMENTS.md](payments/docs/PAYMENTS.md).
+| Suite | Tests | What it checks |
+| --- | --- | --- |
+| `gateway/tests` | 56 | Human visitor redirected; KYA with wrong signer, replayed nonce, blocklisted and sanctioned wallets refused; session bound to the agent's identity; offer validation (exact price, tier floor, excluded content, leaked figure, daily limit per wallet); prompt injection logged and ignored; LLM outage gives a safe refusal; onboarding, rules and activation; owner-only routes; audit chain tamper detection; signed receipts; data retention; security headers |
+| `ingestion/tests` | 52 | Crawl of the demo site, `robots.txt`, SSRF targets refused; PDF and HTML sections, data-rich HTML sold and boilerplate kept free, link following without a sitemap; internal page flagged and never sellable; leak filter on number formats and Unicode variants |
+| `payments/tests` | 21 | Buyer controls owner-only (remote caller refused); recovery of a paid but undelivered sale from the chain; rate limit on paid routes; watermark traces a leak and cannot be forged; encrypted keystores |
+| `buyer-agent` | 26 | Budget, per-purchase cap, approval threshold, daily and hourly caps, structuring detection; tampered invoice (amount, `payTo`, network, asset, scheme) refused before signing; manifest signer pinned; license receipt checked |
+| `buyer-mcp/tests` | 5 | Connector: approval order, seller text sanitised, on-chain balance |
+
+The gateway tests replace the LLM with scripted outputs, so they need no API key.
+
+**End-to-end scripts on the blockchain.** They need funded wallets and spend test USDC on Base Sepolia. The four payment scripts run against the payment module with a simulated gateway (`.venv/bin/uvicorn payments.dev_app:app --port 4022`); the connector script runs against the full gateway with the publisher activated.
+
+| Script | Checks | What it proves |
+| --- | --- | --- |
+| `payments/e2e_query.py` | 15 | Paid route: a wrong amount gets `402`, a replayed payment and a reused nonce get `409`, content only after settlement |
+| `payments/e2e_buyer.py` | 22 | The buyer agent's full journey, from manifest to delivery, one wallet per scenario: a 0.10 sale and a 2.00 sale after approval |
+| `payments/e2e_balances_stats.py` | 10 | Balances read on-chain move by the exact price, `balance_changed` events are emitted, publisher stats follow |
+| `payments/e2e_recovery.py` | 7 | A crash between payment and delivery is recovered from the chain; paid routes are rate-limited |
+| `buyer-mcp/e2e_mcp.py` | 13 | Someone's own Claude, through the MCP connector, buys on Base Sepolia with live sanctions screening (13/13) |
+
+Their real transactions are listed in [payments/docs/ONCHAIN_EVIDENCE.md](payments/docs/ONCHAIN_EVIDENCE.md).
 
 ---
 
