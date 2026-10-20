@@ -1,4 +1,4 @@
-"""Autonomous buyer agent (agent.md 7.2, P3).
+"""Autonomous buyer agent (P3).
 
 It talks to the publisher only over HTTP and holds its own wallet. The LLM only
 proposes accept / refuse / counter. Every money decision is re-checked in code:

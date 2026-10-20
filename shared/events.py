@@ -1,4 +1,4 @@
-"""Event log feeding the live view (agent.md 6.4). Owned by P2.
+"""Event log feeding the live view. Owned by P2.
 
 Every step of every workflow calls `log_event()`. Events are stored in SQLite,
 so the gateway, the buyer agent and scripts can all write them, and

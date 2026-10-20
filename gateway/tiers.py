@@ -1,4 +1,4 @@
-"""Confirmed pricing tiers (agent.md 6.3). Deterministic checks only ever use these."""
+"""Confirmed pricing tiers. Deterministic checks only ever use these."""
 
 from __future__ import annotations
 

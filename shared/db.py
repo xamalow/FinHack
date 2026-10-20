@@ -1,4 +1,4 @@
-"""SQLite access shared by every role (agent.md 6.1). Owned by P2.
+"""SQLite access shared by every component. Owned by P2.
 
 One file, one connection per call. Every role reads and writes its tables
 through these helpers, so the schema stays in one place.

@@ -1,4 +1,4 @@
-"""transactions table (owned by P3, agent.md 6.1).
+"""transactions table (owned by P3).
 
 Replay protection lives here: nonce and offer_id are UNIQUE, so a second
 attempt with the same EIP-3009 nonce or for the same offer fails at insert time,
@@ -101,7 +101,7 @@ def record_request(route, offer_id, session_id, status_code):
 
 
 def stats():
-    """Publisher dashboard numbers (agent.md P4 item 3). Revenue counts settled transactions only."""
+    """Publisher dashboard numbers. Revenue counts settled transactions only."""
     with _conn() as conn:
         requests = conn.execute("SELECT COUNT(*) FROM paid_route_requests").fetchone()[0]
         by_status = dict(conn.execute(

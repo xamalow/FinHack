@@ -1,4 +1,4 @@
-"""Paid routes (agent.md 7.2 step 8): POST /query/{route}, GET /receipt/{tx_hash}, GET /transactions.
+"""Paid routes (x402 payment, settled before delivery): POST /query/{route}, GET /receipt/{tx_hash}, GET /transactions.
 
 Order on a paid request:
 1. session, offer and tier checks

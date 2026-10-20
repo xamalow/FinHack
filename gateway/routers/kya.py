@@ -56,7 +56,7 @@ def verify(body: KyaVerifyIn, request: Request, identity: AgentIdentity = Depend
     if challenge_row["agent_id"] != identity.agent_id or challenge_row["wallet_address"] != identity.wallet:
         raise _reject(identity, "challenge was issued to another agent")
 
-    # Agents may sign the bare nonce (agent.md 7.2 step 3) or the full challenge message.
+    # Agents may sign the bare nonce or the full challenge message.
     signer = None
     for text in (body.nonce, challenge_message(body.nonce, identity.agent_id)):
         try:
