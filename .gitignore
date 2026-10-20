@@ -26,3 +26,6 @@ keys/
 .publisher_signing_key
 .spend_ledger.jsonl
 .pinned_publishers.json
+
+# Submission PDFs are shared privately, never committed
+Doubloon_*.pdf
