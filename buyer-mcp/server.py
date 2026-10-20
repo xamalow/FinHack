@@ -1,5 +1,5 @@
 """MCP connector that turns anyone's own AI assistant (Claude Desktop, Claude Code)
-into a buyer agent for FinHack publishers.
+into a buyer agent for Doubloon publishers.
 
 The assistant is the brain: it searches, talks to the Sales agent and chooses
 what to buy. Money stays under hard rules in this process, never in the LLM:

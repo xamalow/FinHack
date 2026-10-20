@@ -46,8 +46,8 @@ Settings, Developer, Edit Config, then add (absolute paths):
 {
   "mcpServers": {
     "finhack-buyer": {
-      "command": "/ABSOLUTE/PATH/FinHack/.venv/bin/python",
-      "args": ["/ABSOLUTE/PATH/FinHack/buyer-mcp/server.py"]
+      "command": "/ABSOLUTE/PATH/Doubloon/.venv/bin/python",
+      "args": ["/ABSOLUTE/PATH/Doubloon/buyer-mcp/server.py"]
     }
   }
 }
@@ -58,7 +58,7 @@ Restart Claude Desktop, the tools appear under the connectors menu.
 ### Claude Code
 
 ```bash
-claude mcp add finhack-buyer -- /ABSOLUTE/PATH/FinHack/.venv/bin/python /ABSOLUTE/PATH/FinHack/buyer-mcp/server.py
+claude mcp add finhack-buyer -- /ABSOLUTE/PATH/Doubloon/.venv/bin/python /ABSOLUTE/PATH/Doubloon/buyer-mcp/server.py
 ```
 
 ## Demo prompts

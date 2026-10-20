@@ -40,7 +40,7 @@ async def lifespan(_: FastAPI):
     yield
 
 
-app = FastAPI(title="FinHack gateway", version="0.1.0", lifespan=lifespan)
+app = FastAPI(title="Doubloon gateway", version="0.1.0", lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=config.env_list("CORS_ORIGINS") or ["http://localhost:3000"],
